@@ -1,0 +1,3 @@
+# 可选：仅本地开发使用，填写与 site key 对应的 Turnstile 私钥。
+# 复制到 .dev.vars 后填写；不要提交真实密钥。
+TURNSTILE_SECRET=

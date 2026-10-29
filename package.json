@@ -1,0 +1,42 @@
+{
+  "name": "lm-detector-cf",
+  "version": "1.0.0",
+  "description": "Browser-based language model fingerprint comparison powered by lmfpd-sdk, Vue and Cloudflare Workers.",
+  "private": true,
+  "type": "module",
+  "keywords": [
+    "llm",
+    "model-fingerprint",
+    "lmfpd",
+    "vue",
+    "cloudflare-workers"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:api": "wrangler dev --port 8787",
+    "dev:web": "vite",
+    "build:sdk": "esbuild browser/entry.js --bundle --format=esm --outfile=web/src/vendor/lmfpd.browser.js --minify --alias:node:fs/promises=./browser/shims/fs.js --alias:node:os=./browser/shims/os.js --alias:node:crypto=./browser/shims/crypto.js --alias:node:path=./browser/shims/path.js --alias:node:util=./browser/shims/util.js --define:process.env.XDG_CACHE_HOME='\"/tmp\"' --define:process.env='{\"HOME\":\"/home/web\"}' --define:process.platform='\"browser\"' --log-level=warning",
+    "build:og": "node scripts/gen-og.mjs",
+    "build": "npm run build:sdk && npm run build:og && vite build",
+    "deploy": "npm run build && wrangler deploy",
+    "preview:prod": "npm run build && wrangler dev --port 8787",
+    "preview": "wrangler dev --port 8787"
+  },
+  "dependencies": {
+    "buffer": "^6.0.3",
+    "lmfpd-sdk": "^0.2.0",
+    "vue": "^3.5.44",
+    "vue-router": "^5.4.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "esbuild": "^0.28.2",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.5",
+    "wrangler": "^4.155.0"
+  }
+}
