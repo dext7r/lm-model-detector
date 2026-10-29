@@ -53,43 +53,53 @@ async function closeAccount() {
 </script>
 
 <template>
-  <div class="mx-auto max-w-2xl space-y-5">
-    <div>
-      <h1 class="text-[19px] font-semibold">{{ t('account.heading') }}</h1>
-      <p class="mt-1 text-[12.5px] text-mute">{{ auth.user?.name }} · {{ t('account.desc') }}</p>
+  <div>
+    <div class="mb-5 flex flex-wrap items-end gap-3">
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="size-1.5 rounded-full bg-signal"></span>
+          <h1 class="text-[19px] font-semibold tracking-tight">{{ t('account.heading') }}</h1>
+        </div>
+        <p class="mt-1 text-[12.5px] text-mute">
+          <span v-if="auth.user?.name">{{ auth.user.name }} · </span>{{ t('account.desc') }}
+        </p>
+      </div>
     </div>
 
-    <p v-if="detectTask.running" role="status" class="panel p-4 text-[13px] text-warn">
-      {{ t('account.stopHint') }}
-      <button class="btn btn-danger btn-sm ml-2" @click="stopBatch">{{ t('detect.stop') }}</button>
-    </p>
-    <p v-if="auth.user?.deleting" role="status" class="panel border-warn/30 p-4 text-[13px] text-warn">{{ t('account.pending') }}</p>
-    <p v-if="error" role="alert" class="panel border-danger/30 p-4 text-[13px] text-danger">{{ error }}</p>
+    <div v-if="detectTask.running" role="status" class="panel mb-4 flex flex-wrap items-center gap-3 p-4">
+      <p class="min-w-0 flex-1 text-[12.5px] leading-relaxed text-warn">{{ t('account.stopHint') }}</p>
+      <button class="btn btn-danger btn-sm" @click="stopBatch">{{ t('detect.stop') }}</button>
+    </div>
+    <p v-if="auth.user?.deleting" role="status" class="panel mb-4 border-warn/30 p-4 text-[12.5px] leading-relaxed text-warn">{{ t('account.pending') }}</p>
+    <p v-if="error" role="alert" class="panel mb-4 border-danger/25 p-4 text-[12.5px] leading-relaxed text-danger">{{ error }}</p>
 
-    <section class="panel space-y-4 p-5">
-      <h2 class="text-[15px] font-semibold">{{ t('account.cleanup') }}</h2>
-      <p class="text-[12.5px] leading-relaxed text-mute">{{ t('account.cleanupHint') }}</p>
-      <div class="flex flex-wrap gap-3">
-        <button class="btn btn-danger btn-sm" :disabled="blocked || auth.user?.deleting" @click="clean('configs')">{{ t(busy === 'configs' ? 'account.deleting' : 'account.clearConfigs') }}</button>
-        <button class="btn btn-danger btn-sm" :disabled="blocked || auth.user?.deleting" @click="clean('history')">{{ t(busy === 'history' ? 'account.deleting' : 'history.clear') }}</button>
-      </div>
-    </section>
+    <div class="grid gap-4 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)] lg:items-start">
+      <section class="panel min-w-0 border-danger/25 p-5">
+        <h2 class="label-xs text-danger/80">{{ t('account.close') }}</h2>
+        <p class="mt-2 text-[12.5px] leading-relaxed text-mute">{{ t('account.closeHint') }}</p>
+        <p class="mt-2 text-[11.5px] leading-relaxed text-warn">{{ t('account.legacyShares') }}</p>
 
-    <section class="panel border-danger/30 p-5">
-      <h2 class="text-[15px] font-semibold text-danger">{{ t('account.close') }}</h2>
-      <p class="mt-2 text-[12.5px] leading-relaxed text-mute">{{ t('account.closeHint') }}</p>
-      <p class="mt-2 text-[12px] leading-relaxed text-warn">{{ t('account.legacyShares') }}</p>
-      <form class="mt-5 space-y-4" @submit.prevent="closeAccount">
-        <div>
+        <form class="mt-5" @submit.prevent="closeAccount">
           <label for="account-password" class="label-xs mb-1.5 block">{{ t('account.password') }}</label>
           <input id="account-password" v-model="password" type="password" autocomplete="current-password" class="field" required :disabled="blocked" />
-        </div>
-        <div>
-          <label for="account-confirmation" class="label-xs mb-1.5 block">{{ t('account.confirmation') }}</label>
+
+          <label for="account-confirmation" class="label-xs mb-1.5 mt-4 block">{{ t('account.confirmation') }}</label>
           <input id="account-confirmation" v-model="confirmation" autocomplete="off" spellcheck="false" class="field font-mono" placeholder="DELETE" required :disabled="blocked" />
+
+          <div class="mt-5 flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-danger w-full sm:w-auto" :disabled="blocked || !password || confirmation !== 'DELETE'">{{ t(busy === 'account' ? 'account.deleting' : 'account.close') }}</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel min-w-0 p-4">
+        <h2 class="label-xs mb-2.5">{{ t('account.cleanup') }}</h2>
+        <p class="text-[12px] leading-relaxed text-mute">{{ t('account.cleanupHint') }}</p>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <button class="btn btn-danger btn-sm" :disabled="blocked || auth.user?.deleting" @click="clean('configs')">{{ t(busy === 'configs' ? 'account.deleting' : 'account.clearConfigs') }}</button>
+          <button class="btn btn-danger btn-sm" :disabled="blocked || auth.user?.deleting" @click="clean('history')">{{ t(busy === 'history' ? 'account.deleting' : 'history.clear') }}</button>
         </div>
-        <button type="submit" class="btn btn-danger" :disabled="blocked || !password || confirmation !== 'DELETE'">{{ t(busy === 'account' ? 'account.deleting' : 'account.close') }}</button>
-      </form>
-    </section>
+      </section>
+    </div>
   </div>
 </template>
