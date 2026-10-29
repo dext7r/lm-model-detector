@@ -2,8 +2,8 @@ import { createApp } from 'vue'
 import './style.css'
 import App from './App.vue'
 import { router } from './router'
-import { setUnauthorizedHandler } from './api'
-import { auth } from './store'
+import { setUnauthorizedHandler, setDeletionPendingHandler } from './api'
+import { auth, stopBatch } from './store'
 import { initTheme } from './theme'
 import { initLocale, locale } from './i18n'
 import { applySeo } from './seo'
@@ -19,6 +19,11 @@ setUnauthorizedHandler(() => {
   if (!isAccountMode()) return
   auth.user = null
   if (router.currentRoute.value.name !== 'login') router.replace({ name: 'login' })
+})
+
+setDeletionPendingHandler(() => {
+  stopBatch()
+  if (isAccountMode() && router.currentRoute.value.name !== 'account') router.replace({ name: 'account' })
 })
 
 async function start() {

@@ -11,6 +11,8 @@ import HistoryView from './views/HistoryView.vue'
 import HistoryDetailView from './views/HistoryDetailView.vue'
 import ShareView from './views/ShareView.vue'
 import HomeView from './views/HomeView.vue'
+import AccountView from './views/AccountView.vue'
+import { auth } from './store'
 
 export const routes = [
   { path: '/', name: 'home', component: HomeView, meta: { public: true, tab: null } },
@@ -20,6 +22,7 @@ export const routes = [
   { path: '/configs', name: 'configs', component: ConfigsView, meta: { tab: '/configs' } },
   { path: '/configs/new', name: 'config-new', component: ConfigFormView, meta: { tab: '/configs' } },
   { path: '/configs/:id', name: 'config-edit', component: ConfigFormView, meta: { tab: '/configs' } },
+  { path: '/account', name: 'account', component: AccountView, meta: { tab: '/account' } },
   { path: '/history', name: 'history', component: HistoryView, meta: { tab: '/history' } },
   { path: '/history/:key', name: 'history-detail', component: HistoryDetailView, meta: { tab: '/history' } },
   { path: '/:pathMatch(.*)*', redirect: '/detect' },
@@ -37,9 +40,10 @@ export const router = createRouter({
 router.beforeEach(async (to) => {
   await loadRuntime()
   if (!isAccountMode()) {
-    return ['login', 'history', 'history-detail', 'share'].includes(to.name)
+    return ['login', 'history', 'history-detail', 'share', 'account'].includes(to.name)
       ? { name: 'detect', replace: true } : true
   }
+  if (getToken() && auth.user?.deleting && to.name !== 'account') return { name: 'account', replace: true }
   if (!to.meta.public && !getToken()) {
     return { name: 'login', query: to.fullPath !== '/detect' ? { next: to.fullPath } : {} }
   }

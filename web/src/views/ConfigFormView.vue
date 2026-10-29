@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { loadConfigs, configCache, postJSON, toast, resetModels } from '../store'
+import { loadConfigs, configCache, postJSON, toast, resetModels, modelState, detectTask } from '../store'
 import { saveConfig, removeConfig } from '../configs'
 import { accountMode } from '../runtime'
 import { t } from '../i18n'
@@ -12,6 +12,7 @@ const isNew = computed(() => route.params.id === 'new' || route.name === 'config
 const form = ref({ name: '', baseUrl: '', apiKey: '' })
 const showKey = ref(false)
 const saving = ref(false)
+const deleting = ref(false)
 const testing = ref(false)
 const testResult = ref(null)
 const notFound = ref(false)
@@ -64,15 +65,18 @@ async function test() {
 }
 
 async function remove() {
+  if (deleting.value || detectTask.running) return
   if (!confirm(t(accountMode.value ? 'configForm.deleteHint' : 'stateless.deleteConfirm'))) return
+  deleting.value = true
   try {
     await removeConfig(route.params.id)
+    if (modelState.configId === route.params.id) resetModels(null)
     configCache.list = null
     toast(t('configs.deleted'), 'ok')
     router.replace('/configs')
   } catch (e) {
     toast(e.message, 'error')
-  }
+  } finally { deleting.value = false }
 }
 
 onMounted(async () => {
@@ -131,7 +135,7 @@ onMounted(async () => {
           <p class="mt-2 text-[11.5px] text-mute">{{ t(accountMode ? 'configForm.keyHint' : 'stateless.notice') }}</p>
 
           <div class="mt-5 flex flex-wrap gap-2">
-            <button type="submit" class="btn btn-primary flex-1" :disabled="saving">
+            <button type="submit" class="btn btn-primary flex-1" :disabled="saving || deleting">
               <span v-if="saving" class="size-3.5 animate-spin rounded-full border-2 border-on-signal/40 border-t-on-signal"></span>
               {{ saving ? t('common.saving') : (isNew ? t('configForm.save') : t('configForm.saveEdit')) }}
             </button>
@@ -163,7 +167,7 @@ onMounted(async () => {
 
           <section v-if="!isNew" class="panel border-danger/25 p-4">
             <h2 class="label-xs mb-2.5 text-danger/80">{{ t('configForm.danger') }}</h2>
-            <button class="btn btn-danger btn-sm" @click="remove">{{ t('configForm.deleteThis') }}</button>
+            <button class="btn btn-danger btn-sm" :disabled="deleting || saving || detectTask.running" @click="remove">{{ t(deleting ? 'account.deleting' : 'configForm.deleteThis') }}</button>
             <p class="mt-2 text-[11.5px] text-mute">{{ t(accountMode ? 'configForm.deleteHint' : 'stateless.deleteConfirm') }}</p>
           </section>
         </div>

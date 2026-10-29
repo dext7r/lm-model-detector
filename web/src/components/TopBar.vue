@@ -15,7 +15,8 @@ const tabs = computed(() => [
   { path: '/detect', key: 'nav.detect' },
   { path: '/configs', key: 'nav.configs' },
   { path: '/history', key: 'nav.history' },
-].filter(tab => accountMode.value || tab.path !== '/history'))
+  { path: '/account', key: 'account.heading' },
+].filter(tab => accountMode.value || !['/history', '/account'].includes(tab.path)))
 const active = computed(() => route.meta.tab)
 const initial = computed(() => (auth.user?.name || '?').slice(0, 1).toUpperCase())
 const detecting = computed(() => detectTask.running)

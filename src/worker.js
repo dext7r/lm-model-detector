@@ -32,7 +32,7 @@ export default {
       try {
         return await handleApi(request, env, ctx, url)
       } catch (e) {
-        return json({ error: '服务端异常：' + (e?.message || String(e)) }, 500)
+        return json({ error: e?.status ? e.message : '服务端异常：' + (e?.message || String(e)), ...(e?.status === 409 ? { deleting: true } : {}) }, e?.status || 500)
       }
     }
     // 静态资源；未命中且为页面导航请求时回退到 index.html（单页应用路由）
@@ -230,11 +230,13 @@ async function verifyToken(env, request) {
   if (!payload || !sig) return null
   const expect = b64url(await hmacSign(await getSecret(env), payload))
   if (expect !== sig) return null
-  try {
-    const data = JSON.parse(new TextDecoder().decode(b64urlDecode(payload)))
-    if (!data.u || !data.e || Date.now() > data.e) return null
-    return { userId: data.u, name: data.n }
-  } catch { return null }
+  let data
+  try { data = JSON.parse(new TextDecoder().decode(b64urlDecode(payload))) } catch { return null }
+  if (!data.u || !data.e || Date.now() > data.e || typeof data.n !== 'string') return null
+  // 每次校验账户仍存在且 ID 相同，注销后不能继续使用旧签名令牌。
+  const user = await readUser(env, data.n)
+  if (!user || user.id !== data.u) return null
+  return { userId: user.id, name: user.name, deleting: Boolean(user.deleting) }
 }
 
 // ---------- API 路由 ----------
@@ -273,7 +275,7 @@ async function handleApi(request, env, ctx, url) {
   if (path === '/api/auth/me' && method === 'GET') {
     const sess = await verifyToken(env, request)
     if (!sess) return json({ error: '未登录或会话已过期' }, 401)
-    return json({ userId: sess.userId, name: sess.name })
+    return json({ userId: sess.userId, name: sess.name, deleting: sess.deleting })
   }
 
   // ---- 参考数据代理（公开）----
@@ -293,6 +295,8 @@ async function handleApi(request, env, ctx, url) {
   const sess = await verifyToken(env, request)
   if (!sess) return json({ error: '未登录或会话已过期' }, 401)
   const uid = sess.userId
+  if (path === '/api/account' && method === 'DELETE') return deleteAccount(request, env, sess)
+  if (sess.deleting) return json({ error: '账户注销尚未完成，请进入账户设置重试', deleting: true }, 409)
 
   // 模型列表代理
   if (path === '/api/models' && method === 'POST') return handleModels(request)
@@ -302,6 +306,10 @@ async function handleApi(request, env, ctx, url) {
 
   // 配置管理（按用户隔离：ucfg:<uid>）
   if (path === '/api/configs' && method === 'GET') return json(await getConfigs(env, uid))
+  if (path === '/api/configs' && method === 'DELETE') {
+    await env.KV.delete('ucfg:' + uid)
+    return json({ ok: true })
+  }
   if (path === '/api/configs' && method === 'POST') {
     const { name, baseUrl, apiKey } = await readBody(request)
     if (!name || !baseUrl || !apiKey) return json({ error: 'name、baseUrl、apiKey 均必填' }, 400)
@@ -312,6 +320,7 @@ async function handleApi(request, env, ctx, url) {
       createdAt: new Date().toISOString(),
     }
     configs.push(cfg)
+    await requireActiveAccount(env, sess)
     await env.KV.put('ucfg:' + uid, JSON.stringify(configs))
     return json(cfg)
   }
@@ -326,12 +335,17 @@ async function handleApi(request, env, ctx, url) {
       if (baseUrl) c.baseUrl = String(baseUrl).trim()
       if (apiKey) c.apiKey = String(apiKey).trim()
       c.updatedAt = new Date().toISOString()
+      await requireActiveAccount(env, sess)
       await env.KV.put('ucfg:' + uid, JSON.stringify(configs))
       return json(c)
     }
     if (m && method === 'DELETE') {
-      const configs = (await getConfigs(env, uid)).filter(x => x.id !== m[1])
-      await env.KV.put('ucfg:' + uid, JSON.stringify(configs))
+      const configs = await getConfigs(env, uid)
+      const remaining = configs.filter(x => x.id !== m[1])
+      if (remaining.length === configs.length) return json({ error: '配置不存在' }, 404)
+      await requireActiveAccount(env, sess)
+      if (remaining.length) await env.KV.put('ucfg:' + uid, JSON.stringify(remaining))
+      else await env.KV.delete('ucfg:' + uid)
       return json({ ok: true })
     }
   }
@@ -347,6 +361,7 @@ async function handleApi(request, env, ctx, url) {
     // 对外只暴露 h:<uid>: 之后的片段，与列表接口保持一致；
     // 返回完整 KV key 会让详情接口再拼一次前缀，导致 404。
     rec.key = key.slice(`h:${uid}:`.length)
+    await requireActiveAccount(env, sess)
     await env.KV.put(key, JSON.stringify(rec))
     return json(rec)
   }
@@ -357,7 +372,9 @@ async function handleApi(request, env, ctx, url) {
   if (path === '/api/share' && method === 'POST') {
     const { key } = await readBody(request)
     if (!key) return json({ error: '缺少 key' }, 400)
-    const raw = await env.KV.get(`h:${uid}:` + String(key))
+    const fullKey = ownedHistoryKey(uid, String(key))
+    if (!fullKey) return json({ error: '历史记录标识无效' }, 400)
+    const raw = await env.KV.get(fullKey)
     if (!raw) return json({ error: '记录不存在' }, 404)
 
     let rec
@@ -382,7 +399,11 @@ async function handleApi(request, env, ctx, url) {
 
     const id = randId('s_').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24)
     // 90 天后自动清理，避免 KV 无限增长
-    await env.KV.put('share:' + id, JSON.stringify(snapshot), { expirationTtl: 90 * 24 * 3600 })
+    await requireActiveAccount(env, sess)
+    await env.KV.put('share:' + id, JSON.stringify(snapshot), {
+      expirationTtl: 90 * 24 * 3600,
+      metadata: { ownerId: uid, historyKey: fullKey.slice(`h:${uid}:`.length) },
+    })
     return json({ id, key: id })
   }
 
@@ -403,21 +424,25 @@ async function handleApi(request, env, ctx, url) {
     // 单条读取（详情页）
     const m = path.match(/^\/api\/history\/item\/(.+)$/)
     if (m && method === 'GET') {
-      const key = `h:${uid}:` + decodeURIComponent(m[1])
+      const key = ownedHistoryKey(uid, decodeURIComponent(m[1]))
+      if (!key) return json({ error: '历史记录标识无效' }, 400)
       const raw = await env.KV.get(key)
       if (!raw) return json({ error: '记录不存在' }, 404)
       return json(JSON.parse(raw))
     }
     // 单条删除（key 为 h:<uid>: 之后的部分）
     if (m && method === 'DELETE') {
-      await env.KV.delete(`h:${uid}:` + decodeURIComponent(m[1]))
+      const key = ownedHistoryKey(uid, decodeURIComponent(m[1]))
+      if (!key) return json({ error: '历史记录标识无效' }, 400)
+      await deleteHistoryItem(env, uid, key)
       return json({ ok: true })
     }
     // 兼容旧接口：/api/history/<id>
     const m2 = path.match(/^\/api\/history\/([^/]+)$/)
     if (m2 && method === 'DELETE') {
-      const suffix = decodeURIComponent(m2[1])
-      await env.KV.delete(suffix.startsWith('h:') ? suffix : `h:${uid}:${suffix}`)
+      const key = ownedHistoryKey(uid, decodeURIComponent(m2[1]))
+      if (!key) return json({ error: '历史记录标识无效' }, 400)
+      await deleteHistoryItem(env, uid, key)
       return json({ ok: true })
     }
   }
@@ -458,8 +483,8 @@ async function login(request, env) {
   try { user = JSON.parse(raw) } catch { return json({ error: '用户数据损坏' }, 500) }
   const hash = await hashPassword(String(password || ''), user.salt || '')
   if (hash !== user.hash) return json({ error: '用户名或密码错误' }, 401)
-  await migrateLegacyData(env, user)
-  return json({ token: await issueToken(env, user), user: { userId: user.id, name: user.name } })
+  if (!user.deleting) await migrateLegacyData(env, user)
+  return json({ token: await issueToken(env, user), user: { userId: user.id, name: user.name, deleting: Boolean(user.deleting) } })
 }
 
 // 旧版（无用户体系）数据迁移：第一个注册的用户继承原有配置与历史
@@ -483,6 +508,45 @@ async function migrateLegacyData(env, user) {
   }
   await env.KV.delete('configs')
   await env.KV.put('legacy_migrated', user.id)
+}
+
+class AccountError extends Error {
+  constructor(message, status) {
+    super(message)
+    this.status = status
+  }
+}
+
+async function readUser(env, name) {
+  const raw = await env.KV.get('user:' + name.toLowerCase())
+  return raw ? JSON.parse(raw) : null
+}
+
+async function requireActiveAccount(env, session) {
+  const user = await readUser(env, session.name)
+  if (!user || user.id !== session.userId) throw new AccountError('账户不存在或会话已失效', 401)
+  if (user.deleting) throw new AccountError('账户正在注销，请进入账户设置完成删除', 409)
+  return user
+}
+
+async function deleteAccount(request, env, session) {
+  const { password, confirmation } = await readBody(request)
+  if (confirmation !== 'DELETE' || typeof password !== 'string' || !password) {
+    return json({ error: '请输入当前密码，并输入 DELETE 确认注销' }, 400)
+  }
+  const user = await readUser(env, session.name)
+  if (!user || user.id !== session.userId) return json({ error: '账户不存在或会话已失效' }, 401)
+  if (await hashPassword(password, user.salt) !== user.hash) return json({ error: '当前密码不正确' }, 403)
+
+  const accountKey = 'user:' + user.name.toLowerCase()
+  // 中间状态仅阻止新增数据。失败后仍可用密码登录账户设置并重试；不视为注销成功。
+  if (!user.deleting) await env.KV.put(accountKey, JSON.stringify({ ...user, deleting: true }))
+  await clearHistory(env, user.id)
+  await env.KV.delete('ucfg:' + user.id)
+  if (await env.KV.get('legacy_migrated') === user.id) await env.KV.put('legacy_migrated', 'done')
+  // 最后删除含密码摘要的账户记录；不能用标记替代实际删除。
+  await env.KV.delete(accountKey)
+  return json({ ok: true })
 }
 
 // ---------- 配置（按用户）----------
@@ -559,17 +623,41 @@ async function listHistoryPage(env, uid, params) {
   }
 }
 
-async function clearHistory(env, uid) {
+function ownedHistoryKey(uid, value) {
+  const prefix = `h:${uid}:`
+  const suffix = value.startsWith(prefix) ? value.slice(prefix.length) : value
+  if (!suffix || suffix.startsWith('h:') || /[\u0000-\u001f]/.test(suffix)) return null
+  return prefix + suffix
+}
+
+async function deleteMatchingKeys(env, prefix, matches = () => true) {
+  // 先完成所有分页，再执行删除，避免删除改变分页位置而漏项。
+  // 不使用历史列表的 MAX_SCAN，清理范围覆盖整个账户。
   const keys = []
   let cursor
   do {
-    const page = await env.KV.list({ prefix: `h:${uid}:`, cursor, limit: 1000 })
-    keys.push(...page.keys.map(k => k.name))
+    const page = await env.KV.list({ prefix, cursor, limit: 1000 })
+    keys.push(...page.keys.filter(matches).map(key => key.name))
     cursor = page.list_complete ? undefined : page.cursor
   } while (cursor)
-  for (let i = 0; i < keys.length; i += 128) {
-    await Promise.all(keys.slice(i, i + 128).map(k => env.KV.delete(k)))
+  for (let i = 0; i < keys.length; i += 32) {
+    await Promise.all(keys.slice(i, i + 32).map(key => env.KV.delete(key)))
   }
+}
+
+async function deleteOwnedShares(env, uid, historySuffix) {
+  await deleteMatchingKeys(env, 'share:', key => key.metadata?.ownerId === uid
+    && (historySuffix === undefined || key.metadata.historyKey === historySuffix))
+}
+
+async function deleteHistoryItem(env, uid, key) {
+  await deleteOwnedShares(env, uid, key.slice(`h:${uid}:`.length))
+  await env.KV.delete(key)
+}
+
+async function clearHistory(env, uid) {
+  await deleteOwnedShares(env, uid)
+  await deleteMatchingKeys(env, `h:${uid}:`)
 }
 
 // ---------- 模型列表代理 ----------

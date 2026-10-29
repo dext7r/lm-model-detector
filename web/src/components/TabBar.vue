@@ -9,7 +9,8 @@ const tabs = computed(() => [
   { path: '/detect', key: 'nav.detectShort', icon: 'scan' },
   { path: '/configs', key: 'nav.configsShort', icon: 'sliders' },
   { path: '/history', key: 'nav.historyShort', icon: 'list' },
-].filter(tab => accountMode.value || tab.path !== '/history'))
+  { path: '/account', key: 'account.short', icon: 'user' },
+].filter(tab => accountMode.value || !['/history', '/account'].includes(tab.path)))
 const active = computed(() => route.meta.tab)
 </script>
 
@@ -30,6 +31,9 @@ const active = computed(() => route.meta.tab)
           <svg v-else-if="tab.icon === 'sliders'" viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-width="1.7">
             <path d="M4 7h9M17 7h3M4 17h4M12 17h8" stroke-linecap="round" />
             <circle cx="15" cy="7" r="2.2" /><circle cx="10" cy="17" r="2.2" />
+          </svg>
+          <svg v-else-if="tab.icon === 'user'" viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-width="1.7">
+            <circle cx="12" cy="8" r="3.5" /><path d="M5 21v-2a7 7 0 0 1 14 0v2" />
           </svg>
           <svg v-else viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-width="1.7">
             <path d="M4 6h16M4 12h16M4 18h10" stroke-linecap="round" />

@@ -1,9 +1,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api, del } from '../api'
+import { api } from '../api'
 import { t } from '../i18n'
-import { toast } from '../store'
+import { toast, deleteHistory, detectTask } from '../store'
 import StatusBadge from '../components/StatusBadge.vue'
 
 const route = useRoute()
@@ -12,6 +12,7 @@ const rec = ref(null)
 const loading = ref(true)
 const err = ref('')
 const sharing = ref(false)
+const deleting = ref(false)
 const shareResult = ref(null)
 
 const rawKey = computed(() => {
@@ -89,7 +90,7 @@ function scoreBarWidth(t) {
 
 // 创建分享：服务端会生成快照和分享 ID，返回值只有 id
 async function createShare() {
-  if (sharing.value) return
+  if (sharing.value || deleting.value) return
   sharing.value = true
   try {
     const res = await api('/api/share', {
@@ -115,12 +116,15 @@ async function copyShareLink() {
 }
 
 async function remove() {
+  if (deleting.value || sharing.value || detectTask.running) return
   if (!confirm(t('history.deleteConfirm'))) return
+  deleting.value = true
   try {
-    await del('/api/history/item/' + encodeURIComponent(rawKey.value))
+    await deleteHistory(rawKey.value)
     toast(t('history.deleted'), 'ok')
     router.replace('/history')
   } catch (e) { toast(e.message, 'error') }
+  finally { deleting.value = false }
 }
 
 onMounted(async () => {
@@ -160,12 +164,12 @@ onMounted(async () => {
           </p>
         </div>
         <div class="ml-auto flex flex-wrap gap-2">
-          <button class="btn btn-sm btn-primary" :disabled="sharing" @click="createShare">
+          <button class="btn btn-sm btn-primary" :disabled="sharing || deleting" @click="createShare">
             {{ sharing ? t('detail.sharing') : t('detail.share') }}
           </button>
           <RouterLink :to="retestLink" class="btn btn-sm">{{ t('detail.retest') }}</RouterLink>
           <RouterLink to="/history" class="btn btn-sm">{{ t('detail.back') }}</RouterLink>
-          <button class="btn btn-sm btn-danger" @click="remove">{{ t('common.delete') }}</button>
+          <button class="btn btn-sm btn-danger" :disabled="deleting || sharing || detectTask.running" @click="remove">{{ t('common.delete') }}</button>
         </div>
       </div>
 

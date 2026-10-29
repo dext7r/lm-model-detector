@@ -13,3 +13,7 @@ run_worker_first = true
 
 [observability]
 enabled = false
+
+[[routes]]
+pattern = "lm-detector.linuxhub.de5.net"
+custom_domain = true

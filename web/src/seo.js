@@ -15,13 +15,14 @@ const ROUTES = [
   { match: /^\/history/, key: 'seo.history' },
   { match: /^\/s\//, key: 'seo.share' },
   { match: /^\/login/, key: 'seo.login' },
+  { match: /^\/account/, key: 'account' },
 ]
 
 function metaForPath(pathname) {
   const route = ROUTES.find(r => r.match.test(pathname)) || ROUTES[0]
   return {
-    title: t(route.key + '.title'),
-    description: !isAccountMode() && route.key === 'seo.configs' ? t('stateless.notice') : t(route.key + '.desc'),
+    title: route.key === 'account' ? t('account.heading') : t(route.key + '.title'),
+    description: route.key === 'account' ? t('account.desc') : !isAccountMode() && route.key === 'seo.configs' ? t('stateless.notice') : t(route.key + '.desc'),
   }
 }
 
@@ -59,7 +60,7 @@ export function applySeo(pathname = location.pathname) {
   const origin = location.origin
   const canonical = origin + pathname
   // 私有页面（历史详情、配置编辑）不参与索引
-  const noindex = /^\/history\/|^\/configs\//.test(pathname)
+  const noindex = /^\/history\/|^\/configs\/|^\/account(?:\/|$)/.test(pathname)
 
   document.title = meta.title
   setMeta('description', meta.description)

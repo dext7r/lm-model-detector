@@ -16,6 +16,7 @@ const DICT = {
       { match: /^\/configs/, title: '配置管理 · LM 模型指纹检测', description: '保存多组 Base URL 与 API Key，检测时按需切换，配置按账户隔离。' },
       { match: /^\/history/, title: '历史记录 · LM 模型指纹检测', description: '查看、搜索并导出历次模型指纹检测结果。' },
       { match: /^\/s\//, title: '检测结果分享 · LM 模型指纹检测', description: '查看一份公开的模型指纹检测结果，包含识别结论与 Top 候选。' },
+      { match: /^\/account/, title: '账户设置 · LM 模型指纹检测', description: '管理账户、删除已保存的数据或永久注销账户。' },
       { match: /^\/login/, title: '登录 · LM 模型指纹检测', description: '登录后即可使用模型指纹检测，配置与检测结果保存到你的账户。' },
     ],
   },
@@ -28,6 +29,7 @@ const DICT = {
       { match: /^\/configs/, title: 'Configs · LM Fingerprint', description: 'Store multiple Base URLs and API keys, switched as needed and isolated per account.' },
       { match: /^\/history/, title: 'History · LM Fingerprint', description: 'Browse, search and export past model fingerprint results.' },
       { match: /^\/s\//, title: 'Shared result · LM Fingerprint', description: 'A publicly shared model fingerprint result with verdict and top candidates.' },
+      { match: /^\/account/, title: 'Account settings · LM Fingerprint', description: 'Manage your account, delete saved data or permanently close your account.' },
       { match: /^\/login/, title: 'Sign in · LM Fingerprint', description: 'Sign in to use model fingerprint detection. Configs and results are saved to your account.' },
     ],
   },
@@ -69,7 +71,7 @@ export function injectSeo(html, url, lang = 'zh') {
   const desc = escapeHtml(meta.description)
   const canonical = escapeHtml(url.origin + url.pathname)
   // 详情类页面（历史记录、分享）是用户私有或一次性内容，不参与索引
-  const noindex = /^\/history\/|^\/configs\//.test(url.pathname)
+  const noindex = /^\/history\/|^\/configs\/|^\/account(?:\/|$)/.test(url.pathname)
   const robots = noindex ? 'noindex, nofollow' : 'index, follow, max-image-preview:large'
 
   const head = [
@@ -115,6 +117,7 @@ export function robotsTxt(url) {
     'Disallow: /api/',
     'Disallow: /configs',
     'Disallow: /history',
+    'Disallow: /account',
     '',
     `Sitemap: ${url.origin}/sitemap.xml`,
     '',

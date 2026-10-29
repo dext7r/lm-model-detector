@@ -70,9 +70,12 @@ export async function register(username, password, turnstileToken) {
 }
 
 export function logout() {
+  stopBatch()
+  batchVersion++
   clearToken()
   auth.user = null
   configCache.list = null
+  modelState.configId = null
   modelState.list = []
   modelState.selected = []
   detectTask.rows = []
@@ -111,6 +114,25 @@ export async function fetchModels(config) {
   }
 }
 
+export async function deleteAllConfigs() {
+  if (detectTask.running) throw new Error(t('account.stopHint'))
+  await del('/api/configs')
+  configCache.list = []
+  resetModels(null)
+}
+
+export async function deleteHistory(key) {
+  if (detectTask.running) throw new Error(t('account.stopHint'))
+  await del(key ? '/api/history/item/' + encodeURIComponent(key) : '/api/history')
+  if (key) detectTask.rows = detectTask.rows.filter(row => row.record?.key !== key)
+  else {
+    detectTask.rows = []
+    detectTask.phase = 'idle'
+    detectTask.done = 0
+    detectTask.total = 0
+  }
+}
+
 // ---------- 批量检测 ----------
 // SDK 的流式读取在上游「连上但永不结束」时会一直挂在 reader.read() 上：
 // 首字节到达后它就把自己的超时定时器清掉了，之后没有任何兜底。因此这里必须
@@ -129,6 +151,7 @@ export function normalizeConcurrency(n) {
 }
 
 let batchAbort = null
+let batchVersion = 0
 
 export function stopBatch() {
   detectTask.stop = true
@@ -140,6 +163,7 @@ export async function runBatch({ config, models, apiProto, effort, strict, concu
   if (!config) { toast(t('detect.needConfig'), 'warn'); return }
   if (!models.length) { toast(t('detect.needModels'), 'warn'); return }
 
+  const version = ++batchVersion
   const limit = normalizeConcurrency(concurrency)
 
   Object.assign(detectTask, {
@@ -150,25 +174,31 @@ export async function runBatch({ config, models, apiProto, effort, strict, concu
     api: apiProto, effort: effort || '', strict: !!strict,
     startedAt: Date.now(), phase: 'loading-data',
   })
-  batchAbort = new AbortController()
+  const controller = new AbortController()
+  batchAbort = controller
+  const rows = detectTask.rows
 
   let detector
   try {
     const mod = await import('./detector')
     detector = await mod.getDetector()
   } catch (e) {
+    if (version !== batchVersion) return
     detectTask.running = false
     detectTask.phase = 'idle'
     toast(t('detect.dataLoadFailed', { msg: e.message }), 'error', 6000)
     return
   }
 
+  if (version !== batchVersion) return
   detectTask.phase = 'running'
   // worker 池：limit 个 worker 从共享游标里取下一个模型，任一完成立刻补位。
   // 相比「按批切块」的做法，池子不会因为某个慢模型拖住整批。
   let cursor = 0
+  const pendingSaves = []
 
   async function detectOne(row) {
+    if (version !== batchVersion || controller.signal.aborted) return
     row.status = 'running'
     row.samplesDone = 0
     const finishedSamples = new Set()
@@ -177,16 +207,17 @@ export async function runBatch({ config, models, apiProto, effort, strict, concu
     const modelAbort = new AbortController()
     let timedOut = false
     const watchdog = setTimeout(() => { timedOut = true; modelAbort.abort() }, MODEL_TIMEOUT_MS)
-    const signal = AbortSignal.any([batchAbort.signal, modelAbort.signal])
+    const signal = AbortSignal.any([controller.signal, modelAbort.signal])
     try {
-      const cfg = { baseUrl: config.baseUrl, apiKey: config.apiKey, model: row.model, api: detectTask.api }
-      if (detectTask.effort) cfg.effort = detectTask.effort
-      if (detectTask.strict) cfg.strict = true
+      const cfg = { baseUrl: config.baseUrl, apiKey: config.apiKey, model: row.model, api: apiProto }
+      if (effort) cfg.effort = effort
+      if (strict) cfg.strict = true
       const result = await detector.detect(cfg, {
         signal,
         // onSample 在样本流式过程中会反复回调，必须按索引去重，
         // 只统计进入终态的样本，否则计数会虚高。
         onSample: (index, sample) => {
+          if (version !== batchVersion) return
           const state = sample?.state
           if (state && state !== 'queued' && state !== 'waiting' && state !== 'streaming') {
             finishedSamples.add(index)
@@ -194,10 +225,11 @@ export async function runBatch({ config, models, apiProto, effort, strict, concu
           }
         },
       })
+      if (version !== batchVersion) return
       const a = result.analysis || {}
       const record = {
         configId: config.id, configName: config.name, baseUrl: config.baseUrl,
-        model: row.model, api: detectTask.api, effort: detectTask.effort || null,
+        model: row.model, api: apiProto, effort: effort || null,
         error: result.error ?? null,
         decision: a.decision ?? null,
         prediction: a.prediction ?? null, prediction_name: a.prediction_name ?? null,
@@ -218,11 +250,12 @@ export async function runBatch({ config, models, apiProto, effort, strict, concu
       row.record = record
       row.status = record.error ? 'fail' : 'done'
       if (isAccountMode()) {
-        postJSON('/api/history', record)
-          .then(saved => { if (saved?.key) row.record.key = saved.key })
-          .catch(() => {})
+        pendingSaves.push(postJSON('/api/history', record)
+          .then(saved => { if (version === batchVersion && saved?.key) row.record.key = saved.key })
+          .catch(() => {}))
       }
     } catch (e) {
+      if (version !== batchVersion) return
       row.status = 'fail'
       // 中止与超时要给出可区分的提示，否则用户只会看到一句莫名的 AbortError
       row.err = timedOut
@@ -231,20 +264,23 @@ export async function runBatch({ config, models, apiProto, effort, strict, concu
     } finally {
       clearTimeout(watchdog)
     }
-    detectTask.done++
+    if (version === batchVersion) detectTask.done++
   }
 
   // 启动 limit 个 worker，各自从共享游标里领任务；谁先跑完谁接着领下一个。
   // 用一个同步自增的游标即可，JS 单线程下取任务不存在竞态。
-  const workerCount = Math.min(limit, detectTask.rows.length)
+  const workerCount = Math.min(limit, rows.length)
   const workers = Array.from({ length: workerCount }, async () => {
-    while (!detectTask.stop) {
+    while (version === batchVersion && !controller.signal.aborted && !detectTask.stop) {
       const index = cursor++
-      if (index >= detectTask.rows.length) break
-      await detectOne(detectTask.rows[index])
+      if (index >= rows.length) break
+      await detectOne(rows[index])
     }
   })
   await Promise.all(workers)
+  // 删除入口只有在采样和已发出的历史保存均结束后才重新开放。
+  await Promise.allSettled(pendingSaves)
+  if (version !== batchVersion) return
 
   // 被跳过的行（停止时还没开始）要标成「已取消」，否则会永远停在等待中
   for (const row of detectTask.rows) {

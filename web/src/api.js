@@ -7,7 +7,12 @@ export const getToken = () => {
   try { return localStorage.getItem(TOKEN_KEY) || '' } catch { return '' }
 }
 export const setToken = (t) => { if (isAccountMode()) localStorage.setItem(TOKEN_KEY, t) }
-export const clearToken = () => { if (isAccountMode()) localStorage.removeItem(TOKEN_KEY) }
+export const clearToken = () => {
+  try { if (isAccountMode()) localStorage.removeItem(TOKEN_KEY) } catch { /* 存储不可访问时仍清理内存状态 */ }
+}
+
+let onDeletionPending = () => {}
+export function setDeletionPendingHandler(fn) { onDeletionPending = fn }
 
 let onUnauthorized = () => {}
 export function setUnauthorizedHandler(fn) { onUnauthorized = fn }
@@ -28,6 +33,7 @@ export async function api(path, opts = {}) {
     onUnauthorized()
     throw new Error(data.error || '未登录或会话已过期')
   }
+  if (res.status === 409 && data.deleting) onDeletionPending()
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
   return data
 }

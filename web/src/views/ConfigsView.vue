@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { loadConfigs, configCache, toast } from '../store'
+import { loadConfigs, configCache, toast, modelState, resetModels, detectTask } from '../store'
 import { removeConfig } from '../configs'
 import { accountMode } from '../runtime'
 import EmptyState from '../components/EmptyState.vue'
@@ -10,6 +10,7 @@ import { t } from '../i18n'
 const router = useRouter()
 const configs = computed(() => configCache.list || [])
 const loading = ref(true)
+const deleting = ref('')
 
 function maskKey(k) {
   if (!k) return ''
@@ -24,15 +25,18 @@ function fmtDate(iso) {
 }
 
 async function remove(c) {
+  if (deleting.value || detectTask.running) return
   if (!confirm(t(accountMode.value ? 'configs.deleteConfirm' : 'stateless.deleteConfirm'))) return
+  deleting.value = c.id
   try {
     await removeConfig(c.id)
+    if (modelState.configId === c.id) resetModels(null)
     configCache.list = null
     await loadConfigs(true)
     toast(t('configs.deleted'), 'ok')
   } catch (e) {
     toast(e.message, 'error')
-  }
+  } finally { deleting.value = '' }
 }
 
 onMounted(async () => {
@@ -42,6 +46,7 @@ onMounted(async () => {
 
 <template>
   <div>
+    <p v-if="detectTask.running" role="status" class="mb-4 text-[12.5px] text-warn">{{ t('account.stopHint') }}</p>
     <div class="mb-5 flex flex-wrap items-end gap-3">
       <div>
         <div class="flex items-center gap-2">
@@ -76,7 +81,7 @@ onMounted(async () => {
           <div class="flex shrink-0 flex-wrap gap-2">
             <RouterLink :to="`/detect?config=${encodeURIComponent(c.id)}`" class="btn btn-sm">{{ t('configs.goDetect') }}</RouterLink>
             <RouterLink :to="`/configs/${encodeURIComponent(c.id)}`" class="btn btn-sm">{{ t('common.edit') }}</RouterLink>
-            <button class="btn btn-sm btn-danger" @click="remove(c)">{{ t('common.delete') }}</button>
+            <button class="btn btn-sm btn-danger" :disabled="Boolean(deleting) || detectTask.running" @click="remove(c)">{{ t(deleting === c.id ? 'account.deleting' : 'common.delete') }}</button>
           </div>
         </div>
       </article>

@@ -3,7 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, buildQuery, getToken } from '../api'
 import { t } from '../i18n'
-import { loadConfigs, configCache, del, toast } from '../store'
+import { loadConfigs, configCache, deleteHistory, detectTask, toast } from '../store'
 import Pager from '../components/Pager.vue'
 import EmptyState from '../components/EmptyState.vue'
 import StatusBadge from '../components/StatusBadge.vue'
@@ -13,6 +13,7 @@ const router = useRouter()
 
 const data = ref({ items: [], total: 0, totalPages: 1, page: 1, pageSize: 20 })
 const loading = ref(true)
+const deleting = ref('')
 const searchInput = ref(route.query.q || '')
 const configs = computed(() => configCache.list || [])
 
@@ -37,6 +38,7 @@ async function load() {
     data.value = await api('/api/history' + buildQuery({
       page: page.value, pageSize: pageSize.value, q: query.value, configId: activeConfig.value,
     }))
+    if (page.value > data.value.totalPages) patchQuery({ page: data.value.totalPages > 1 ? data.value.totalPages : undefined })
   } catch (e) {
     toast(e.message, 'error')
     data.value = { items: [], total: 0, totalPages: 1, page: 1, pageSize: pageSize.value }
@@ -61,21 +63,27 @@ function fmtTime(iso) {
 }
 
 async function removeItem(item) {
+  if (deleting.value || loading.value || detectTask.running) return
   if (!confirm(t('history.deleteConfirm'))) return
+  deleting.value = item.key || item.id
   try {
-    await del('/api/history/item/' + encodeURIComponent(item.key || item.id))
+    await deleteHistory(item.key || item.id)
     toast(t('history.deleted'), 'ok')
     await load()
   } catch (e) { toast(e.message, 'error') }
+  finally { deleting.value = '' }
 }
 
 async function clearAll() {
+  if (deleting.value || loading.value || detectTask.running) return
   if (!confirm(t('history.clearConfirm'))) return
+  deleting.value = 'all'
   try {
-    await del('/api/history')
+    await deleteHistory()
     toast(t('history.cleared'), 'ok')
     await load()
   } catch (e) { toast(e.message, 'error') }
+  finally { deleting.value = '' }
 }
 
 async function exportJson() {
@@ -100,6 +108,7 @@ onMounted(async () => {
 
 <template>
   <div>
+    <p v-if="detectTask.running" role="status" class="mb-4 text-[12.5px] text-warn">{{ t('account.stopHint') }}</p>
     <div class="mb-5 flex flex-wrap items-end gap-3">
       <div>
         <div class="flex items-center gap-2">
@@ -112,7 +121,7 @@ onMounted(async () => {
       </div>
       <div class="ml-auto flex gap-2">
         <button class="btn btn-sm" @click="exportJson">{{ t('history.export') }}</button>
-        <button class="btn btn-sm btn-danger" @click="clearAll">{{ t('history.clear') }}</button>
+        <button class="btn btn-sm btn-danger" :disabled="Boolean(deleting) || loading || detectTask.running" @click="clearAll">{{ t('history.clear') }}</button>
       </div>
     </div>
 
@@ -198,7 +207,7 @@ onMounted(async () => {
                 <span class="truncate text-[12px] text-mute">{{ h.configName || '—' }}</span>
               </td>
               <td class="whitespace-nowrap px-4 py-3 text-right">
-                <button class="btn btn-ghost btn-sm opacity-0 transition-opacity group-hover:opacity-100" @click.stop="removeItem(h)">{{ t('common.delete') }}</button>
+                <button class="btn btn-ghost btn-sm" :disabled="Boolean(deleting) || detectTask.running" @click.stop="removeItem(h)">{{ t('common.delete') }}</button>
               </td>
             </tr>
           </tbody>
@@ -226,6 +235,7 @@ onMounted(async () => {
             <span>{{ fmtTime(h.time) }}</span>
             <span v-if="h.probability != null" class="text-signal">{{ (h.probability * 100).toFixed(1) }}%</span>
             <span class="truncate">{{ h.configName }}</span>
+            <button class="btn btn-danger btn-sm ml-auto" :disabled="Boolean(deleting) || detectTask.running" @click.stop="removeItem(h)">{{ t('common.delete') }}</button>
           </div>
         </article>
       </div>
