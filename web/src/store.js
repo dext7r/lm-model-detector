@@ -1,6 +1,8 @@
 import { reactive, ref } from 'vue'
 import { api, postJSON, putJSON, del, buildQuery, getToken, setToken, clearToken } from './api'
 import { t } from './i18n'
+import { listConfigs } from './configs'
+import { isAccountMode } from './runtime'
 
 // 便于视图层统一从 store 引入
 export { api, postJSON, putJSON, del, buildQuery, getToken, setToken, clearToken }
@@ -83,7 +85,7 @@ export async function loadConfigs(force = false) {
   if (configCache.list && !force) return configCache.list
   configCache.loading = true
   try {
-    configCache.list = await api('/api/configs')
+    configCache.list = await listConfigs()
     return configCache.list
   } finally {
     configCache.loading = false
@@ -215,9 +217,11 @@ export async function runBatch({ config, models, apiProto, effort, strict, concu
       }
       row.record = record
       row.status = record.error ? 'fail' : 'done'
-      postJSON('/api/history', record)
-        .then(saved => { if (saved?.key) row.record.key = saved.key })
-        .catch(() => {})
+      if (isAccountMode()) {
+        postJSON('/api/history', record)
+          .then(saved => { if (saved?.key) row.record.key = saved.key })
+          .catch(() => {})
+      }
     } catch (e) {
       row.status = 'fail'
       // 中止与超时要给出可区分的提示，否则用户只会看到一句莫名的 AbortError

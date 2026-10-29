@@ -2,6 +2,8 @@
 // 站点密钥由 /api/config 下发，未配置时该接口返回空串，整块逻辑自动跳过——
 // 因此本地开发不需要任何额外配置。
 
+import { loadRuntime, runtime } from './runtime'
+
 const SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
 
 let siteKeyPromise = null
@@ -11,10 +13,7 @@ let widgetId = null
 /** 读取站点密钥；结果缓存，避免每页重复请求 */
 export function getSiteKey() {
   if (!siteKeyPromise) {
-    siteKeyPromise = fetch('/api/config')
-      .then(r => (r.ok ? r.json() : {}))
-      .then(d => d?.turnstileSiteKey || '')
-      .catch(() => '')
+    siteKeyPromise = loadRuntime().then(() => runtime.turnstileSiteKey)
   }
   return siteKeyPromise
 }

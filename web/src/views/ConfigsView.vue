@@ -1,7 +1,9 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { loadConfigs, configCache, del, toast } from '../store'
+import { loadConfigs, configCache, toast } from '../store'
+import { removeConfig } from '../configs'
+import { accountMode } from '../runtime'
 import EmptyState from '../components/EmptyState.vue'
 import { t } from '../i18n'
 
@@ -22,9 +24,9 @@ function fmtDate(iso) {
 }
 
 async function remove(c) {
-  if (!confirm(`确定删除配置「${c.name}」？已产生的检测历史会保留。`)) return
+  if (!confirm(t(accountMode.value ? 'configs.deleteConfirm' : 'stateless.deleteConfirm'))) return
   try {
-    await del('/api/configs/' + encodeURIComponent(c.id))
+    await removeConfig(c.id)
     configCache.list = null
     await loadConfigs(true)
     toast(t('configs.deleted'), 'ok')
@@ -46,7 +48,7 @@ onMounted(async () => {
           <span class="size-1.5 rounded-full bg-signal"></span>
           <h1 class="text-[19px] font-semibold tracking-tight">{{ t('configs.heading') }}</h1>
         </div>
-        <p class="mt-1 text-[12.5px] text-mute">{{ t('configs.desc', { n: configs.length }) }}</p>
+        <p class="mt-1 text-[12.5px] text-mute">{{ accountMode ? t('configs.desc', { n: configs.length }) : t('stateless.notice') }}</p>
       </div>
       <div class="ml-auto">
         <RouterLink to="/configs/new" class="btn btn-primary btn-sm">{{ t('configs.add') }}</RouterLink>

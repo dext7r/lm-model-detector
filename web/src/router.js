@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getToken } from './api'
 import { applySeo } from './seo'
+import { loadRuntime, isAccountMode } from './runtime'
 
 import LoginView from './views/LoginView.vue'
 import DetectView from './views/DetectView.vue'
@@ -33,7 +34,12 @@ export const router = createRouter({
   },
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
+  await loadRuntime()
+  if (!isAccountMode()) {
+    return ['login', 'history', 'history-detail', 'share'].includes(to.name)
+      ? { name: 'detect', replace: true } : true
+  }
   if (!to.meta.public && !getToken()) {
     return { name: 'login', query: to.fullPath !== '/detect' ? { next: to.fullPath } : {} }
   }

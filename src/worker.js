@@ -1,5 +1,5 @@
 // LM 模型指纹检测工具 - Cloudflare Worker 后端
-// 职责：静态资源 + 用户体系（注册/登录/会话）+ 按用户隔离的配置/历史 KV 存储
+// 职责：静态资源 + 可选用户体系与 KV 存储；未绑定 KV 时仅提供无状态检测
 //       + 模型列表代理 + 检测请求转发 + 参考数据代理
 // 检测评分逻辑在浏览器端运行（web/src/vendor/lmfpd.browser.js）
 import { injectSeo, robotsTxt, sitemapXml, rssXml, pickLang } from './seo.js'
@@ -16,7 +16,7 @@ export default {
         })
       }
       if (url.pathname === '/sitemap.xml') {
-        return new Response(sitemapXml(url, await listShareKeys(env)), {
+        return new Response(sitemapXml(url, await listShareKeys(env), Boolean(env.KV)), {
           headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' },
         })
       }
@@ -70,6 +70,7 @@ async function renderIndex(env, url, request) {
 
 // sitemap 只收录最近的分享，避免 KV 列表过长拖慢响应
 async function listShareKeys(env) {
+  if (!env.KV) return []
   try {
     const page = await env.KV.list({ prefix: 'share:', limit: 500 })
     return page.keys
@@ -77,6 +78,7 @@ async function listShareKeys(env) {
 }
 
 async function listRecentShares(env) {
+  if (!env.KV) return []
   try {
     const page = await env.KV.list({ prefix: 'share:', limit: 20 })
     const items = await Promise.all(page.keys.map(async k => {
@@ -103,7 +105,7 @@ const SESSION_TTL_MS = 30 * 24 * 3600 * 1000 // 会话有效期 30 天
 function json(obj, status = 200, extra = {}) {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS_HEADERS, ...extra },
+    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...CORS_HEADERS, ...extra },
   })
 }
 
@@ -241,15 +243,33 @@ async function handleApi(request, env, ctx, url) {
   const method = request.method
   if (method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS })
 
+  // 只以实际 KV 绑定选择模式。已绑定 KV 的故障不会切换为免登录。
+  const accountMode = Boolean(env.KV)
+  if (path === '/api/config' && method === 'GET') {
+    return json({
+      mode: accountMode ? 'account' : 'stateless',
+      turnstileSiteKey: accountMode && turnstileState(env) === 'ready' ? resolveSiteKey(env, url) : '',
+    })
+  }
+
+  if (!accountMode) {
+    if (path.startsWith('/api/data/') && (method === 'GET' || method === 'HEAD')) {
+      return handleDataProxy(request, ctx, url, false)
+    }
+    if (path === '/api/models' || path === '/api/proxy') {
+      const origin = request.headers.get('Origin')
+      if (origin ? origin !== url.origin : request.headers.get('Sec-Fetch-Site') !== 'same-origin') {
+        return json({ error: '仅接受本站发起的请求' }, 403)
+      }
+      if (path === '/api/models' && method === 'POST') return handleModels(request, true)
+      if (path === '/api/proxy' && ['GET', 'HEAD', 'POST'].includes(method)) return handleProxy(request, url, true)
+    }
+    return json({ error: '当前部署未启用账户、历史或云端分享' }, 404)
+  }
+
   // ---- 认证（无需登录）----
   if (path === '/api/auth/register' && method === 'POST') return register(request, env)
   if (path === '/api/auth/login' && method === 'POST') return login(request, env)
-  // 公开配置：前端据此决定是否渲染人机验证
-  if (path === '/api/config' && method === 'GET') {
-    return json({
-      turnstileSiteKey: turnstileState(env) === 'ready' ? resolveSiteKey(env, url) : '',
-    })
-  }
   if (path === '/api/auth/me' && method === 'GET') {
     const sess = await verifyToken(env, request)
     if (!sess) return json({ error: '未登录或会话已过期' }, 401)
@@ -278,7 +298,7 @@ async function handleApi(request, env, ctx, url) {
   if (path === '/api/models' && method === 'POST') return handleModels(request)
 
   // 检测请求转发
-  if (path === '/api/proxy' && method === 'POST') return handleProxy(request, url)
+  if (path === '/api/proxy' && ['GET', 'HEAD', 'POST'].includes(method)) return handleProxy(request, url)
 
   // 配置管理（按用户隔离：ucfg:<uid>）
   if (path === '/api/configs' && method === 'GET') return json(await getConfigs(env, uid))
@@ -553,12 +573,13 @@ async function clearHistory(env, uid) {
 }
 
 // ---------- 模型列表代理 ----------
-async function handleModels(request) {
+async function handleModels(request, stateless = false) {
   const { baseUrl, apiKey } = await readBody(request)
   if (!baseUrl || !apiKey) return json({ error: 'baseUrl 和 apiKey 必填' }, 400)
   const endpoint = normalizeBase(String(baseUrl).trim()) + '/models'
+  if (stateless && !isHttpsDomainTarget(endpoint)) return json({ error: '免登录模式仅支持 HTTPS 域名接口，不支持 IP 或本地名称' }, 400)
   try {
-    const r = await fetchWithTimeout(endpoint, { headers: { Authorization: `Bearer ${apiKey}` } }, 30000)
+    const r = await fetchWithTimeout(endpoint, { headers: { Authorization: `Bearer ${apiKey}` }, ...(stateless ? { redirect: 'manual' } : {}) }, 30000)
     const text = await r.text()
     if (!r.ok) return json({ error: `HTTP ${r.status}: ${text.slice(0, 500)}` }, r.status)
     let data
@@ -582,12 +603,16 @@ const PROXY_ALLOWED_HEADERS = new Set([
   'anthropic-version', 'anthropic-beta', 'x-api-key', 'openai-organization', 'openai-project',
 ])
 
-async function handleProxy(request, url) {
+async function handleProxy(request, url, stateless = false) {
   const target = url.searchParams.get('url')
   if (!target) return json({ error: '缺少 url 参数' }, 400)
   let targetUrl
   try { targetUrl = new URL(target) } catch { return json({ error: 'url 参数无效' }, 400) }
   if (!/^https?:$/.test(targetUrl.protocol)) return json({ error: '仅支持 http/https' }, 400)
+
+  if (stateless && !isHttpsDomainTarget(targetUrl.href)) {
+    return json({ error: '免登录模式仅支持 HTTPS 域名接口，不支持 IP 或本地名称' }, 400)
+  }
 
   const headers = {}
   for (const [k, v] of request.headers.entries()) {
@@ -604,11 +629,16 @@ async function handleProxy(request, url) {
       method,
       headers,
       body: body?.byteLength ? body : undefined,
+      ...(stateless ? { redirect: 'manual' } : {}),
     })
+    if (stateless && upstream.status >= 300 && upstream.status < 400) {
+      return json({ error: '免登录模式不跟随上游重定向，请填写最终接口地址' }, 502)
+    }
     const respHeaders = new Headers()
     const ct = upstream.headers.get('content-type')
     if (ct) respHeaders.set('content-type', ct)
     respHeaders.set('Access-Control-Allow-Origin', '*')
+    respHeaders.set('Cache-Control', 'no-store')
     return new Response(upstream.body, { status: upstream.status, headers: respHeaders })
   } catch (e) {
     return json({ error: '转发失败：' + (e?.message || String(e)) }, 502)
@@ -618,13 +648,13 @@ async function handleProxy(request, url) {
 // ---------- 参考数据代理（带边缘缓存）----------
 const DATA_SOURCES = ['https://lm.ikale.io/data/', 'https://cdn.jsdmirror.com/npm/lmfpd-data@latest/']
 
-async function handleDataProxy(request, ctx, url) {
+async function handleDataProxy(request, ctx, url, cacheEnabled = true) {
   const rel = url.pathname.slice('/api/data/'.length)
   if (!/^[\w.-]+(\/[\w.-]+)*$/.test(rel)) return json({ error: '路径无效' }, 400)
 
-  const cache = caches.default
+  const cache = cacheEnabled ? caches.default : null
   const cacheKey = new Request(url.href, { method: 'GET' })
-  let res = await cache.match(cacheKey)
+  let res = cache ? await cache.match(cacheKey) : null
   if (res) return res
 
   let lastErr
@@ -633,15 +663,28 @@ async function handleDataProxy(request, ctx, url) {
       const upstream = await fetchWithTimeout(source + rel, {}, 120000)
       if (!upstream.ok) { lastErr = new Error(`HTTP ${upstream.status}`); continue }
       res = new Response(upstream.body, upstream)
-      res.headers.set('Cache-Control', 'public, max-age=86400')
+      res.headers.set('Cache-Control', cacheEnabled ? 'public, max-age=86400' : 'no-store')
       res.headers.set('Access-Control-Allow-Origin', '*')
-      ctx.waitUntil(cache.put(cacheKey, res.clone()))
+      if (cache) ctx.waitUntil(cache.put(cacheKey, res.clone()))
       return res
     } catch (e) {
       lastErr = e
     }
   }
   return json({ error: '参考数据获取失败：' + (lastErr?.message || 'unknown') }, 502)
+}
+
+// 免登录代理不接受 IP 字面量、本地主机、内网名称或 URL 内嵌凭据。
+// 不自动跟随重定向，避免已检查的目标被替换。
+function isHttpsDomainTarget(value) {
+  try {
+    const url = new URL(value)
+    const host = url.hostname.toLowerCase().replace(/\.$/, '')
+    return url.protocol === 'https:' && !url.username && !url.password
+      && (!url.port || url.port === '443')
+      && /^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z][a-z0-9-]*$/.test(host)
+      && !/(?:^|\.)(?:localhost|local|internal|lan|home|test|invalid)$/.test(host)
+  } catch { return false }
 }
 
 // ---------- 工具 ----------

@@ -9,7 +9,7 @@ const SITE_KEYWORDS =
 const DICT = {
   zh: {
     name: 'LM 模型指纹检测',
-    desc: '通过采样接口返回的数字序列，识别 API 背后真实调用的语言模型。支持批量检测、结果分享，配置与历史按账户隔离存储。',
+    desc: '通过采样接口返回的数字序列，识别 API 背后真实调用的语言模型。浏览器内计算评分，支持批量检测与可选的账户存储。',
     routes: [
       { match: /^\/$/, title: 'LM 模型指纹检测 · 识别 API 背后的真实模型', description: null },
       { match: /^\/detect/, title: '批量检测 · LM 模型指纹检测', description: '勾选模型后批量检测接口背后真实调用的模型，支持并发、严格模式与结果分享。' },
@@ -21,7 +21,7 @@ const DICT = {
   },
   en: {
     name: 'LM Fingerprint',
-    desc: 'Sample the numeric sequences an endpoint returns to identify the language model actually serving it. Batch detection, shareable results, per-account history.',
+    desc: 'Sample the numeric sequences an endpoint returns to identify the language model actually serving it. Browser-based scoring, batch detection and optional account storage.',
     routes: [
       { match: /^\/$/, title: 'LM Fingerprint · See the real model behind any API', description: null },
       { match: /^\/detect/, title: 'Batch detect · LM Fingerprint', description: 'Select models and detect what each endpoint really runs, with concurrency, strict mode and shareable results.' },
@@ -126,9 +126,9 @@ export function robotsTxt(url) {
  * @param {URL} url
  * @param {Array<{name: string, metadata?: object}>} shareKeys KV list 得到的 key
  */
-export function sitemapXml(url, shareKeys = []) {
+export function sitemapXml(url, shareKeys = [], accountMode = true) {
   const urls = [
-    ...PUBLIC_ROUTES.map(p => ({ loc: url.origin + p, priority: p === '/' ? '1.0' : '0.8' })),
+    ...PUBLIC_ROUTES.filter(p => accountMode || p !== '/login').map(p => ({ loc: url.origin + p, priority: p === '/' ? '1.0' : '0.8' })),
     ...shareKeys.map(k => ({
       loc: `${url.origin}/s/${k.name.slice('share:'.length)}`,
       priority: '0.5',

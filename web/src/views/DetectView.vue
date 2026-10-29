@@ -11,6 +11,7 @@ import ScanBar from '../components/ScanBar.vue'
 import EmptyState from '../components/EmptyState.vue'
 import { fuzzyFilter } from '../fuzzy'
 import { t } from '../i18n'
+import { accountMode } from '../runtime'
 
 const route = useRoute()
 const router = useRouter()
@@ -163,10 +164,10 @@ onMounted(async () => {
           <span class="size-1.5 rounded-full bg-signal pulse-dot text-signal"></span>
           <h1 class="text-[19px] font-semibold tracking-tight">{{ t('detect.heading') }}</h1>
         </div>
-        <p class="mt-1 text-[12.5px] text-mute">{{ t('detect.desc') }}</p>
+        <p class="mt-1 text-[12.5px] text-mute">{{ t(accountMode ? 'detect.desc' : 'stateless.notice') }}</p>
       </div>
       <div class="ml-auto flex items-center gap-2">
-        <RouterLink to="/history" class="btn btn-sm">{{ t('detect.viewHistory') }}</RouterLink>
+        <RouterLink v-if="accountMode" to="/history" class="btn btn-sm">{{ t('detect.viewHistory') }}</RouterLink>
       </div>
     </div>
 

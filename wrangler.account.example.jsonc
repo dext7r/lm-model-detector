@@ -1,0 +1,25 @@
+{
+  "name": "lm-model-detector",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "none"
+  },
+  // 可选：启用 Turnstile 时，同时配置 site key 和 TURNSTILE_SECRET。
+  // 都未配置时跳过验证；只配置一项时登录和注册将被拒绝。
+  "vars": {
+    "TURNSTILE_SITE_KEY": ""
+  },
+  // 绑定 KV 即启用账户模式。替换为自己的命名空间 ID；全零值仅为占位。
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "00000000000000000000000000000000"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

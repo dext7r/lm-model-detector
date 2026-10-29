@@ -4,17 +4,18 @@ import { useRoute, useRouter } from 'vue-router'
 import { auth, detectTask, logout, toast } from '../store'
 import { theme, toggleTheme } from '../theme'
 import { t, locale, toggleLocale } from '../i18n'
+import { accountMode } from '../runtime'
 
 const route = useRoute()
 const router = useRouter()
 const isLight = computed(() => theme.value === 'light')
 
 // 标签用 i18n key，渲染时取词，切换语言即时更新
-const tabs = [
+const tabs = computed(() => [
   { path: '/detect', key: 'nav.detect' },
   { path: '/configs', key: 'nav.configs' },
   { path: '/history', key: 'nav.history' },
-]
+].filter(tab => accountMode.value || tab.path !== '/history'))
 const active = computed(() => route.meta.tab)
 const initial = computed(() => (auth.user?.name || '?').slice(0, 1).toUpperCase())
 const detecting = computed(() => detectTask.running)
@@ -57,7 +58,7 @@ function doLogout() {
           <span class="font-mono text-[11px] text-signal">{{ detectTask.done }}/{{ detectTask.total }}</span>
         </div>
 
-        <div class="flex items-center gap-2 rounded-full border border-line bg-ink-800 py-1 pl-1 pr-2.5">
+        <div v-if="accountMode" class="flex items-center gap-2 rounded-full border border-line bg-ink-800 py-1 pl-1 pr-2.5">
           <span class="grid size-6 place-items-center rounded-full bg-signal/12 text-[11px] font-bold text-signal">
             {{ initial }}
           </span>
@@ -87,7 +88,7 @@ function doLogout() {
           </svg>
         </button>
 
-        <button class="btn btn-ghost btn-sm !px-2" title="退出登录" aria-label="退出登录" @click="doLogout">
+        <button v-if="accountMode" class="btn btn-ghost btn-sm !px-2" title="退出登录" aria-label="退出登录" @click="doLogout">
           <svg viewBox="0 0 20 20" class="size-4" fill="none" stroke="currentColor" stroke-width="1.6">
             <path d="M12 6V4.5A1.5 1.5 0 0 0 10.5 3h-6A1.5 1.5 0 0 0 3 4.5v11A1.5 1.5 0 0 0 4.5 17h6a1.5 1.5 0 0 0 1.5-1.5V14" stroke-linecap="round" />
             <path d="M8 10h9m0 0-2.5-2.5M17 10l-2.5 2.5" stroke-linecap="round" stroke-linejoin="round" />

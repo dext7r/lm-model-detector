@@ -23,7 +23,8 @@ export default defineConfig({
     host: '127.0.0.1',
     proxy: {
       // 本地调试时把接口请求转发到 wrangler dev（npm run dev:api）
-      '/api': { target: 'http://127.0.0.1:8787', changeOrigin: true },
+      // 保留浏览器访问的 Host，让 Worker 的同源检查在本地也成立。
+      '/api': { target: 'http://127.0.0.1:8787', changeOrigin: false },
     },
   },
 })

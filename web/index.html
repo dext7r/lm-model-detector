@@ -9,15 +9,12 @@
        下面这几行是纯静态部署或本地开发时的兜底值 -->
   <!--seo-->
   <title>LM 模型指纹检测 · 识别 API 背后的真实模型</title>
-  <meta name="description" content="通过采样接口返回的数字序列，识别 API 背后真实调用的语言模型。支持批量检测、结果分享，配置与历史按账户隔离存储。" />
+  <meta name="description" content="通过采样接口返回的数字序列，识别 API 背后真实调用的语言模型。浏览器内计算评分，支持批量检测与可选的账户存储。" />
   <!-- 在首屏渲染前定好主题，避免深色闪成浅色 -->
   <script>
     (function () {
       try {
-        var saved = localStorage.getItem('lmfpd_theme')
-        var mode = saved === 'light' || saved === 'dark'
-          ? saved
-          : (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+        var mode = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
         document.documentElement.dataset.theme = mode
         document.documentElement.style.colorScheme = mode
         var meta = document.querySelector('meta[name="theme-color"]')

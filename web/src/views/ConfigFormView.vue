@@ -1,7 +1,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { loadConfigs, configCache, postJSON, putJSON, del, toast, resetModels } from '../store'
+import { loadConfigs, configCache, postJSON, toast, resetModels } from '../store'
+import { saveConfig, removeConfig } from '../configs'
+import { accountMode } from '../runtime'
 import { t } from '../i18n'
 
 const route = useRoute()
@@ -29,9 +31,7 @@ async function save() {
       baseUrl: form.value.baseUrl.trim(),
       apiKey: form.value.apiKey.trim(),
     }
-    const saved = isNew.value
-      ? await postJSON('/api/configs', body)
-      : await putJSON('/api/configs/' + encodeURIComponent(route.params.id), body)
+    const saved = await saveConfig(body, isNew.value ? undefined : route.params.id)
     configCache.list = null
     if (resetModels) resetModels(null)
     toast(t(isNew.value ? 'configForm.saved' : 'configForm.updated'), 'ok')
@@ -64,9 +64,9 @@ async function test() {
 }
 
 async function remove() {
-  if (!confirm(t('configForm.deleteHint'))) return
+  if (!confirm(t(accountMode.value ? 'configForm.deleteHint' : 'stateless.deleteConfirm'))) return
   try {
-    await del('/api/configs/' + encodeURIComponent(route.params.id))
+    await removeConfig(route.params.id)
     configCache.list = null
     toast(t('configs.deleted'), 'ok')
     router.replace('/configs')
@@ -109,11 +109,11 @@ onMounted(async () => {
     <template v-else>
       <div class="mb-5">
         <h1 class="text-[19px] font-semibold tracking-tight">{{ isNew ? t('configForm.new') : t('configForm.edit') }}</h1>
-        <p class="mt-1 text-[12.5px] text-mute">{{ t('configForm.baseUrlHint') }}</p>
+        <p class="mt-1 text-[12.5px] text-mute">{{ t(accountMode ? 'configForm.baseUrlHint' : 'stateless.urlHint') }}</p>
       </div>
 
       <div class="grid gap-4 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)] lg:items-start">
-        <form class="panel p-5" @submit.prevent="save">
+        <form class="panel p-5" autocomplete="off" @submit.prevent="save">
           <label class="label-xs mb-1.5 block">{{ t('configForm.name') }}</label>
           <input v-model="form.name" class="field" maxlength="60" :placeholder="t('configForm.namePlaceholder')" />
 
@@ -128,7 +128,7 @@ onMounted(async () => {
             <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-[11.5px] text-mute hover:text-chalk"
                     @click="showKey = !showKey">{{ showKey ? t('configForm.hide') : t('configForm.show') }}</button>
           </div>
-          <p class="mt-2 text-[11.5px] text-mute">{{ t('configForm.keyHint') }}</p>
+          <p class="mt-2 text-[11.5px] text-mute">{{ t(accountMode ? 'configForm.keyHint' : 'stateless.notice') }}</p>
 
           <div class="mt-5 flex flex-wrap gap-2">
             <button type="submit" class="btn btn-primary flex-1" :disabled="saving">
@@ -164,7 +164,7 @@ onMounted(async () => {
           <section v-if="!isNew" class="panel border-danger/25 p-4">
             <h2 class="label-xs mb-2.5 text-danger/80">{{ t('configForm.danger') }}</h2>
             <button class="btn btn-danger btn-sm" @click="remove">{{ t('configForm.deleteThis') }}</button>
-            <p class="mt-2 text-[11.5px] text-mute">{{ t('configForm.deleteHint') }}</p>
+            <p class="mt-2 text-[11.5px] text-mute">{{ t(accountMode ? 'configForm.deleteHint' : 'stateless.deleteConfirm') }}</p>
           </section>
         </div>
       </div>

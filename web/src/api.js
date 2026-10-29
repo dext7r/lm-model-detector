@@ -1,8 +1,13 @@
+import { isAccountMode } from './runtime'
+
 const TOKEN_KEY = 'lmfpd_token'
 
-export const getToken = () => localStorage.getItem(TOKEN_KEY) || ''
-export const setToken = (t) => localStorage.setItem(TOKEN_KEY, t)
-export const clearToken = () => localStorage.removeItem(TOKEN_KEY)
+export const getToken = () => {
+  if (!isAccountMode()) return ''
+  try { return localStorage.getItem(TOKEN_KEY) || '' } catch { return '' }
+}
+export const setToken = (t) => { if (isAccountMode()) localStorage.setItem(TOKEN_KEY, t) }
+export const clearToken = () => { if (isAccountMode()) localStorage.removeItem(TOKEN_KEY) }
 
 let onUnauthorized = () => {}
 export function setUnauthorizedHandler(fn) { onUnauthorized = fn }
@@ -13,12 +18,12 @@ export async function api(path, opts = {}) {
   if (token) headers.Authorization = 'Bearer ' + token
   let res
   try {
-    res = await fetch(path, { ...opts, headers })
+    res = await fetch(path, { ...opts, headers, cache: 'no-store' })
   } catch {
     throw new Error('网络请求失败，请检查连接后重试')
   }
   const data = await res.json().catch(() => ({}))
-  if (res.status === 401) {
+  if (res.status === 401 && isAccountMode()) {
     clearToken()
     onUnauthorized()
     throw new Error(data.error || '未登录或会话已过期')

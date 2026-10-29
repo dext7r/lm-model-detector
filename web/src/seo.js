@@ -2,6 +2,7 @@
 // 所有绝对地址都取 location.origin，不写死域名，便于同产物多域名部署。
 
 import { t, locale } from './i18n'
+import { isAccountMode } from './runtime'
 
 const SITE_KEYWORDS =
   '模型指纹检测,AI 模型识别,API 模型检测,LLM 指纹,模型指纹,接口模型识别,claude,gpt,大模型检测,model fingerprint,llm detection'
@@ -20,7 +21,7 @@ function metaForPath(pathname) {
   const route = ROUTES.find(r => r.match.test(pathname)) || ROUTES[0]
   return {
     title: t(route.key + '.title'),
-    description: t(route.key + '.desc'),
+    description: !isAccountMode() && route.key === 'seo.configs' ? t('stateless.notice') : t(route.key + '.desc'),
   }
 }
 

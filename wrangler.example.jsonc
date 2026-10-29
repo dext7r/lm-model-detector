@@ -7,19 +7,9 @@
     "binding": "ASSETS",
     "not_found_handling": "none"
   },
-  // 可选：启用 Turnstile 时，同时配置 site key 和 TURNSTILE_SECRET。
-  // 都未配置时跳过验证；只配置一项时登录和注册将被拒绝。
-  "vars": {
-    "TURNSTILE_SITE_KEY": ""
-  },
-  // 部署前替换为自己创建的 KV 命名空间 ID。全零值仅为模板占位。
-  "kv_namespaces": [
-    {
-      "binding": "KV",
-      "id": "00000000000000000000000000000000"
-    }
-  ],
+  // 不绑定 KV：自动启用免登录、无业务数据持久化模式。
+  // 需要账户、历史与云端分享时，改用 wrangler.account.example.jsonc。
   "observability": {
-    "enabled": true
+    "enabled": false
   }
 }

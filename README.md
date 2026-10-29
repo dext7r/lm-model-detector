@@ -1,6 +1,6 @@
 # 模型指纹检测 · LM Fingerprint Detector
 
-基于上游项目 [lm-detector](https://github.com/Ikaleio/lm-detector) 的 [lmfpd-sdk](https://www.npmjs.com/package/lmfpd-sdk) 开发的模型指纹检测应用。填写 Base URL 和 API Key，拉取模型列表，批量采样并与参考库中的模型进行统计比对。支持多组配置、账户隔离、检测历史、结果分享和中英双语界面。
+基于上游项目 [lm-detector](https://github.com/Ikaleio/lm-detector) 的 [lmfpd-sdk](https://www.npmjs.com/package/lmfpd-sdk) 开发的模型指纹检测应用。填写 Base URL 和 API Key，拉取模型列表，批量采样并与参考库中的模型进行统计比对。支持多组配置与中英双语界面；绑定 KV 后还支持账户隔离、检测历史和云端分享。
 
 检测结果是**参考库内的候选排名，不能确证模型身份**。核心检测算法由上游 SDK 提供，本项目负责浏览器适配、界面、请求代理及账户存储。[检测逻辑说明](docs/DETECTION.md)介绍采样、评分和结果限制。
 
@@ -19,7 +19,8 @@ src/worker.js               账户、配置、历史、分享及代理 API
 src/seo.js                  服务端 SEO、sitemap 和 RSS
 scripts/                    本地启动器与分享图生成脚本
 docs/DETECTION.md           检测逻辑及字段说明
-wrangler.example.jsonc      脱敏部署配置模板
+wrangler.example.jsonc      默认免登录、无存储部署模板
+wrangler.account.example.jsonc  可选账户版部署模板
 .dev.vars.example           本地密钥模板
 THIRD_PARTY_NOTICES.md       第三方版权及许可证原文
 ```
@@ -40,17 +41,30 @@ cp .dev.vars.example .dev.vars
 npm run dev
 ```
 
-访问 `http://127.0.0.1:5180`，在 `/login` 注册账户。启动器运行 Worker（8787 端口）与 Vite（5180 端口），`/api/` 请求由 Vite 转发给 Worker。本地 KV 存在 `.wrangler/state` 中。模板中的全零 KV ID 仅用于占位，远程部署前必须替换。
+访问 `http://127.0.0.1:5180`，默认无需登录即可检测。启动器运行 Worker（8787 端口）与 Vite（5180 端口），`/api/` 请求由 Vite 转发给 Worker。需要本地体验账户版时，改用 `wrangler.account.example.jsonc` 复制为本地配置；本地 KV 数据位于 `.wrangler/state` 中。已有 `wrangler.jsonc` 的模式取决于其中是否绑定 KV，不会被代码更新自动更改。
 
 也可以通过 `npm run dev:api` 和 `npm run dev:web` 分别启动两端。
 
 ## 自行部署
 
-1. 复制模板为本地 `wrangler.jsonc`，按需修改 Worker 名称。
-2. 使用自己的 Cloudflare 账户创建 KV 命名空间：`npx wrangler kv namespace create KV`，把返回的 ID 填到本地配置的 `kv_namespaces` 中，保留绑定名 `KV`。
-3. 需要自定义域名时，在本地配置中添加自己的 `routes`；模板不绑定任何现有站点。
-4. 如需 Turnstile，填写 `vars.TURNSTILE_SITE_KEY`，并执行 `npx wrangler secret put TURNSTILE_SECRET` 保存匹配的私钥。也支持用 `TURNSTILE_SITE_KEY_MAP` 配置按域名选择的 site key。两类密钥都未配置时跳过验证；只配置其中一类会拒绝登录和注册。
+同一份代码通过 **是否绑定 `KV`** 自动选择模式，无需额外的前端构建开关：
+
+| 功能 | 未绑定 KV：免登录版 | 已绑定 KV：账户版 |
+| --- | --- | --- |
+| 登录与注册 | 无需登录 | 启用账户鉴权 |
+| 配置与 API Key | 仅当前页面内存 | 按账户写入 KV |
+| 检测结果 | 当前页面展示，刷新即清空 | 自动保存历史 |
+| 历史、云端分享、分享 RSS | 不启用 | 启用 |
+| 主题和语言偏好 | 仅当前页面内存 | 浏览器 localStorage |
+| 参考数据边缘缓存 | 不主动写入缓存，响应为 no-store | 缓存 24 小时 |
+
+1. **免登录版（默认）**：复制 `wrangler.example.jsonc` 为 `wrangler.jsonc`，无需创建 KV，也无需配置 Turnstile。模板默认关闭 Worker 可观测性日志。
+2. **账户版（可选）**：复制 `wrangler.account.example.jsonc` 为 `wrangler.jsonc`；使用自己的 Cloudflare 账户创建 KV 命名空间：`npx wrangler kv namespace create KV`，将 ID 填入 `kv_namespaces`，保留绑定名 `KV`。模板中的全零 ID 仅用于占位。访问 `/login` 注册账户。
+3. 按需修改 Worker 名称；需要自定义域名时添加自己的 `routes`，模板不绑定现有站点。
+4. 账户版可选启用 Turnstile：填写 `vars.TURNSTILE_SITE_KEY`，并执行 `npx wrangler secret put TURNSTILE_SECRET` 保存匹配私钥。也支持用 `TURNSTILE_SITE_KEY_MAP` 按域名选择 site key。两类密钥都未配置时仅跳过人机验证，账户登录仍然必需；只配置一类会拒绝登录和注册。免登录版忽略 Turnstile 配置。
 5. 完成配置后，自行运行所需构建和部署命令。
+
+已有部署要切换为免登录版时，删除本地配置中的 `KV` 绑定后重新部署即可；代码不会删除旧 KV 中已有的数据。重新绑定原 KV 可恢复账户功能。KV 已绑定但访问失败时仍按账户模式报错，不会降级成免登录。
 
 | 命令 | 用途 |
 | --- | --- |
@@ -65,7 +79,13 @@ npm run dev
 
 ## 数据流与隐私
 
-评分在浏览器内运行，但检测请求经部署实例的 Worker 转发，API Key 会经过该服务端；保存配置时，Base URL 与 API Key 一并写入该实例的 KV，当前没有应用层加密。仅使用自己信任的部署实例。
+评分在浏览器内运行，模型列表与检测请求经部署实例的 Worker 转发，API Key 会经过该服务端。取消本站登录不影响目标模型服务要求的 API Key。仅使用自己信任的部署实例。
+
+**免登录版**不创建账户、不访问 KV、不保存历史或分享，不读写浏览器 localStorage，也不主动写入参考数据边缘缓存。配置、密钥、模型列表和结果仅在当前页面内存中存活，刷新或关闭即清空。应用不主动持久化这些数据，不代表浏览器、Cloudflare 或上游模型服务没有自身的缓存与访问记录。默认模板关闭可观测性；已有部署需自行核实平台上的日志设置。
+
+免登录代理接受本站浏览器发起的请求，仅允许标准 HTTPS 端口的域名地址，拒绝 IP 字面量、本地名称和 URL 内嵌凭据，并拒绝上游重定向。这是请求来源和 URL 格式限制，不是用户鉴权，也不保证域名实际解析到公网；公开部署可按自己的使用范围额外配置域名允许列表或平台限流。
+
+**账户版**保存配置时，Base URL 与 API Key 一并写入实例 KV，当前没有应用层加密。
 
 密码使用 PBKDF2-SHA256（100,000 次迭代）摘要，会话使用 HMAC 签名。会话令牌保存在浏览器 localStorage，配置和历史按账户 ID 隔离。历史保存评分摘要、前三候选和样本状态，不保存完整回答。主动创建的分享链接可被任何持有链接的人读取。
 

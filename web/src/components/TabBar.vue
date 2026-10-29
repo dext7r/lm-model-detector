@@ -2,13 +2,14 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { t } from '../i18n'
+import { accountMode } from '../runtime'
 
 const route = useRoute()
-const tabs = [
+const tabs = computed(() => [
   { path: '/detect', key: 'nav.detectShort', icon: 'scan' },
   { path: '/configs', key: 'nav.configsShort', icon: 'sliders' },
   { path: '/history', key: 'nav.historyShort', icon: 'list' },
-]
+].filter(tab => accountMode.value || tab.path !== '/history'))
 const active = computed(() => route.meta.tab)
 </script>
 

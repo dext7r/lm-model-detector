@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { isAccountMode } from './runtime'
 
 // 轻量国际化：不引入 vue-i18n，本站文案结构简单，
 // 一个响应式 locale + 平铺字典足够，且能完全控制中英文措辞。
@@ -7,7 +8,7 @@ export const SUPPORTED = ['zh', 'en']
 
 function readInitial() {
   try {
-    const v = localStorage.getItem(STORAGE_KEY)
+    const v = isAccountMode() ? localStorage.getItem(STORAGE_KEY) : null
     if (SUPPORTED.includes(v)) return v
   } catch { /* 隐私模式下忽略 */ }
   // 未显式选择时跟随浏览器语言
@@ -21,7 +22,7 @@ export function setLocale(l) {
   const next = SUPPORTED.includes(l) ? l : 'zh'
   locale.value = next
   document.documentElement.lang = next === 'zh' ? 'zh-CN' : 'en'
-  try { localStorage.setItem(STORAGE_KEY, next) } catch { /* 忽略 */ }
+  try { if (isAccountMode()) localStorage.setItem(STORAGE_KEY, next) } catch { /* 忽略 */ }
 }
 
 export function toggleLocale() {
@@ -29,7 +30,7 @@ export function toggleLocale() {
 }
 
 export function initLocale() {
-  setLocale(locale.value)
+  setLocale(readInitial())
 }
 
 /** 取词；支持 {name} 形式的占位符 */
@@ -45,6 +46,13 @@ export function t(key, params) {
 export const messages = {
   zh: {
     // ---------- 通用 ----------
+    'runtime.failed': '无法读取站点配置，请检查网络后重试。',
+    'stateless.urlHint': '填写 HTTPS 域名接口地址；免登录模式不支持 IP、本地地址或重定向。',
+    'stateless.enter': '直接开始检测',
+    'stateless.featureTitle': '用完即清空',
+    'stateless.notice': '无需登录。配置、密钥和结果仅保留在当前页面内存中，刷新或关闭后清空。',
+    'stateless.results': '查看本次检测的识别结果与候选排名，结果只保留到页面刷新或关闭。',
+    'stateless.deleteConfirm': '确定移除这组临时配置？此操作只影响当前页面。',
     'common.appName': '模型指纹检测',
     'common.brandSub': 'LM Fingerprint',
     'common.retry': '重试',
@@ -84,10 +92,10 @@ export const messages = {
     'footer.note': 'API Key 仅用于向你填写的接口发起请求',
 
     // ---------- 首页 ----------
-    'home.badge': '浏览器内评分 · 不上传密钥',
+    'home.badge': '浏览器内评分 · 请求经本站代理转发',
     'home.title1': '看清 API 背后',
     'home.title2': '真正在跑的是什么模型',
-    'home.desc': '中转站、代理、镜像站常常悄悄替换模型。我们通过采样接口返回的数字序列，比对生成规律，给出这个接口实际对应的模型与置信度——全部在你的浏览器内完成。',
+    'home.desc': '中转站、代理、镜像站常常悄悄替换模型。我们通过采样接口返回的数字序列，比对生成规律，给出这个接口实际对应的模型与置信度。评分在浏览器内完成，接口请求经本站代理转发。',
     'home.enter': '登录后开始',
     'home.enterAuthed': '进入工作台',
     'home.register': '注册账户',
@@ -112,7 +120,7 @@ export const messages = {
     'home.f4d': '每条结论可生成公开链接与带品牌样式的图片，链接 90 天后自动失效。',
     'home.stepsTitle': '三步出结果',
     'home.s1t': '添加配置',
-    'home.s1d': '填入 Base URL 与 API Key，支持任意 OpenAI / Anthropic 兼容接口。',
+    'home.s1d': '填入兼容 OpenAI / Anthropic 的接口地址与 API Key。',
     'home.s2t': '拉取模型',
     'home.s2d': '自动读取接口暴露的模型列表，支持模糊搜索与批量勾选。',
     'home.s3t': '读取结论',
@@ -358,7 +366,7 @@ export const messages = {
 
     // ---------- 页面 TDK ----------
     'seo.home.title': 'LM 模型指纹检测 · 识别 API 背后的真实模型',
-    'seo.home.desc': '通过采样接口返回的数字序列，识别 API 背后真实调用的语言模型。支持批量检测、结果分享，配置与历史按账户隔离存储。',
+    'seo.home.desc': '通过采样接口返回的数字序列，识别 API 背后真实调用的语言模型。浏览器内计算评分，支持批量检测与可选的账户存储。',
     'seo.detect.title': '批量检测 · LM 模型指纹检测',
     'seo.detect.desc': '勾选模型后批量检测接口背后真实调用的模型，支持并发、严格模式与结果分享。',
     'seo.configs.title': '配置管理 · LM 模型指纹检测',
@@ -372,6 +380,13 @@ export const messages = {
   },
 
   en: {
+    'runtime.failed': 'Unable to load site configuration. Check your connection and retry.',
+    'stateless.urlHint': 'Use an HTTPS domain endpoint. IP addresses, local names and redirects are unavailable in this mode.',
+    'stateless.enter': 'Start without signing in',
+    'stateless.featureTitle': 'Nothing saved',
+    'stateless.notice': 'No sign-in. Configs, keys and results stay in this page’s memory and clear on refresh or close.',
+    'stateless.results': 'View this run’s predictions and top candidates. Results clear on refresh or close.',
+    'stateless.deleteConfirm': 'Remove this temporary config from the current page?',
     'common.appName': 'LM Fingerprint',
     'common.brandSub': 'Model Detector',
     'common.retry': 'Retry',
@@ -408,10 +423,10 @@ export const messages = {
     'footer.copyright': '© {year} LM Fingerprint · Scores are computed locally in your browser, for reference only',
     'footer.note': 'API keys are only used to call the endpoint you configured',
 
-    'home.badge': 'Browser-side scoring · No key upload',
+    'home.badge': 'Browser-side scoring · Requests use this site’s proxy',
     'home.title1': 'See what model',
     'home.title2': 'is really behind the API',
-    'home.desc': 'Proxies and mirrors often swap the model quietly. We sample the numeric sequences each endpoint returns, compare their generation patterns, and report which model it actually maps to — entirely inside your browser.',
+    'home.desc': 'Proxies and mirrors often swap the model quietly. We sample the numeric sequences each endpoint returns, compare their generation patterns, and rank the closest candidates. Scoring runs in your browser; API requests pass through this site’s proxy.',
     'home.enter': 'Sign in to start',
     'home.enterAuthed': 'Open console',
     'home.register': 'Create account',
@@ -673,7 +688,7 @@ export const messages = {
 
     // ---------- Page TDK ----------
     'seo.home.title': 'LM Fingerprint · See the real model behind any API',
-    'seo.home.desc': 'Sample the numeric sequences an endpoint returns to identify the language model actually serving it. Batch detection, shareable results, per-account history.',
+    'seo.home.desc': 'Sample the numeric sequences an endpoint returns to identify the language model actually serving it. Browser-based scoring, batch detection and optional account storage.',
     'seo.detect.title': 'Batch detect · LM Fingerprint',
     'seo.detect.desc': 'Select models and detect what each endpoint really runs, with concurrency, strict mode and shareable results.',
     'seo.configs.title': 'Configs · LM Fingerprint',

@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { t } from '../i18n'
+import { accountMode } from '../runtime'
 
 // 公共页脚：所有页面共用，保证站点信息、RSS 入口、免责声明只有一处维护。
 const year = computed(() => new Date().getFullYear())
@@ -26,9 +27,9 @@ const year = computed(() => new Date().getFullYear())
         <nav class="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-mute">
           <RouterLink to="/" class="transition-colors hover:text-chalk">{{ t('nav.home') }}</RouterLink>
           <RouterLink to="/detect" class="transition-colors hover:text-chalk">{{ t('nav.detect') }}</RouterLink>
-          <RouterLink to="/history" class="transition-colors hover:text-chalk">{{ t('nav.history') }}</RouterLink>
+          <RouterLink v-if="accountMode" to="/history" class="transition-colors hover:text-chalk">{{ t('nav.history') }}</RouterLink>
           <RouterLink to="/configs" class="transition-colors hover:text-chalk">{{ t('nav.configs') }}</RouterLink>
-          <a href="/rss.xml" target="_blank" rel="noopener noreferrer" class="transition-colors hover:text-chalk">{{ t('footer.rss') }}</a>
+          <a v-if="accountMode" href="/rss.xml" target="_blank" rel="noopener noreferrer" class="transition-colors hover:text-chalk">{{ t('footer.rss') }}</a>
         </nav>
       </div>
 

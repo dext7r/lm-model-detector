@@ -2,27 +2,28 @@
 import { computed, onMounted } from 'vue'
 import { auth, ensureUser } from '../store'
 import { t, locale, toggleLocale } from '../i18n'
+import { accountMode } from '../runtime'
 
 const loggedIn = computed(() => !!auth.user)
 const initial = computed(() => (auth.user?.name || '?').slice(0, 1).toUpperCase())
-const enterTo = computed(() => (loggedIn.value ? '/detect' : '/login'))
-const enterLabel = computed(() => (loggedIn.value ? t('home.enterAuthed') : t('home.enter')))
+const enterTo = computed(() => (!accountMode.value || loggedIn.value ? '/detect' : '/login'))
+const enterLabel = computed(() => !accountMode.value ? t('stateless.enter') : t(loggedIn.value ? 'home.enterAuthed' : 'home.enter'))
 
 // 已登录用户进首页时补一次会话校验，拿到用户名用于顶栏展示
 onMounted(() => { ensureUser() })
 
-const features = [
+const features = computed(() => [
   { titleKey: 'home.f1t', descKey: 'home.f1d', icon: 'samples' },
   { titleKey: 'home.f2t', descKey: 'home.f2d', icon: 'bulk' },
   { titleKey: 'home.f3t', descKey: 'home.f3d', icon: 'local' },
-  { titleKey: 'home.f4t', descKey: 'home.f4d', icon: 'share' },
-]
+  { titleKey: accountMode.value ? 'home.f4t' : 'stateless.featureTitle', descKey: accountMode.value ? 'home.f4d' : 'stateless.notice', icon: 'share' },
+])
 
-const steps = [
+const steps = computed(() => [
   { n: '01', titleKey: 'home.s1t', descKey: 'home.s1d' },
   { n: '02', titleKey: 'home.s2t', descKey: 'home.s2d' },
-  { n: '03', titleKey: 'home.s3t', descKey: 'home.s3d' },
-]
+  { n: '03', titleKey: 'home.s3t', descKey: accountMode.value ? 'home.s3d' : 'stateless.results' },
+])
 </script>
 
 <template>
@@ -85,7 +86,7 @@ const steps = [
 
             <div class="mt-8 flex flex-wrap items-center gap-3">
               <RouterLink :to="enterTo" class="btn btn-primary">{{ enterLabel }}</RouterLink>
-              <RouterLink to="/login?mode=register" class="btn">{{ t('home.register') }}</RouterLink>
+              <RouterLink v-if="accountMode" to="/login?mode=register" class="btn">{{ t('home.register') }}</RouterLink>
             </div>
 
             <dl class="mt-10 grid max-w-md grid-cols-3 gap-4 border-t border-line-soft pt-6">
@@ -186,7 +187,7 @@ const steps = [
           <div class="relative flex flex-wrap items-center gap-4">
             <div class="min-w-0">
               <h2 class="text-[18px] font-semibold tracking-tight">{{ t('home.ctaTitle') }}</h2>
-              <p class="mt-1.5 text-[12.5px] text-mute">{{ t('home.ctaDesc') }}</p>
+              <p class="mt-1.5 text-[12.5px] text-mute">{{ t(accountMode ? 'home.ctaDesc' : 'stateless.notice') }}</p>
             </div>
             <div class="ml-auto flex flex-wrap gap-2">
               <RouterLink :to="enterTo" class="btn btn-primary">{{ enterLabel }}</RouterLink>
