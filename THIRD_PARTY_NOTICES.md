@@ -1,6 +1,8 @@
 # 第三方版权与授权
 
-本项目使用 lmfpd-sdk 实现检测，浏览器适配层及应用界面不改变上游算法的版权归属。以下保留随仓库浏览器 SDK 一并分发的组件授权原文。应用其他代码不因这些第三方授权自动获得相同许可。
+本项目使用上游项目 [Ikaleio/lm-detector](https://github.com/Ikaleio/lm-detector) 的 [lmfpd-sdk](https://www.npmjs.com/package/lmfpd-sdk) 实现检测，浏览器适配层及应用界面不改变上游算法的版权归属。上游命令行工具发布为 [lmfpd](https://www.npmjs.com/package/lmfpd)，本项目使用的检测组件为 [lmfpd-sdk 0.2.0](https://www.npmjs.com/package/lmfpd-sdk/v/0.2.0)。本项目的适配范围见 [README](README.md#版权与来源)。
+
+以下保留随仓库浏览器 SDK 一并分发的组件授权原文。应用其他代码不因这些第三方授权自动获得相同许可。
 
 ## lmfpd-sdk
 

@@ -1,8 +1,8 @@
 # 模型指纹检测 · LM Fingerprint Detector
 
-基于 `lmfpd-sdk` 的模型指纹检测应用。填写 Base URL 和 API Key，拉取模型列表，批量采样并与参考库中的模型进行统计比对。支持多组配置、账户隔离、检测历史、结果分享和中英双语界面。
+基于上游项目 [lm-detector](https://github.com/Ikaleio/lm-detector) 的 [lmfpd-sdk](https://www.npmjs.com/package/lmfpd-sdk) 开发的模型指纹检测应用。填写 Base URL 和 API Key，拉取模型列表，批量采样并与参考库中的模型进行统计比对。支持多组配置、账户隔离、检测历史、结果分享和中英双语界面。
 
-检测结果是**参考库内的候选排名，不能确证模型身份**。核心检测算法来自 `lmfpd-sdk`，本项目提供浏览器适配、界面、请求代理及账户存储。[检测逻辑说明](docs/DETECTION.md)介绍采样、评分和结果限制。
+检测结果是**参考库内的候选排名，不能确证模型身份**。核心检测算法由上游 SDK 提供，本项目负责浏览器适配、界面、请求代理及账户存储。[检测逻辑说明](docs/DETECTION.md)介绍采样、评分和结果限制。
 
 ## 技术与目录
 
@@ -71,6 +71,14 @@ npm run dev
 
 ## 版权与来源
 
-核心检测组件 **lmfpd-sdk 0.2.0** 采用 **MIT License**，原作者版权为 **Copyright (c) 2026 xqy2006**。SDK 来源与完整授权条款，以及浏览器 bundle 中相关组件的版权，见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。现有页面版权标识与 bundle 内的许可证注释予以保留。
+上游项目及相关资料：
+
+- [Ikaleio/lm-detector：上游源码仓库](https://github.com/Ikaleio/lm-detector)
+- [lmfpd：上游命令行工具（npm）](https://www.npmjs.com/package/lmfpd)
+- [lmfpd-sdk 0.2.0：本项目使用的检测 SDK（npm）](https://www.npmjs.com/package/lmfpd-sdk/v/0.2.0)
+- [上游使用与原理文档](https://lm.ikale.io/docs)
+- [本项目的第三方版权与授权声明](THIRD_PARTY_NOTICES.md)
+
+本项目通过 SDK 复用上游检测能力。核心检测组件 **lmfpd-sdk 0.2.0** 采用 **MIT License**，原作者版权为 **Copyright (c) 2026 xqy2006**。完整授权条款及浏览器 bundle 中相关组件的版权见上述第三方声明；现有页面版权标识与 bundle 内的许可证注释予以保留。
 
 本次整理未为应用自身新增许可证；第三方组件的 MIT 授权只覆盖对应组件。若要正式以开源许可证发布应用其余代码，仍需由其版权持有人明确授权。

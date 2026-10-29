@@ -1,6 +1,6 @@
 # 检测逻辑
 
-本文依据仓库当前使用的 `lmfpd-sdk 0.2.0` 实现及 `web/src/store.js`、`web/src/detector.js` 编写。检测算法、参考库及校准参数来自 SDK 上游；本项目不重新训练检测器。依赖升级后应重新核对本文。
+本文依据仓库当前使用的 [lmfpd-sdk 0.2.0](https://www.npmjs.com/package/lmfpd-sdk/v/0.2.0) 实现及 `web/src/store.js`、`web/src/detector.js` 编写。检测算法、参考库及校准参数来自上游项目 [Ikaleio/lm-detector](https://github.com/Ikaleio/lm-detector)；本项目不重新训练检测器。依赖升级后应重新核对本文。
 
 ## 一次检测的过程
 
@@ -51,4 +51,4 @@ SDK 对各分支标准化，再按参考检测器中的权重融合排序。本�
 
 SDK 默认参考源为 `https://lm.ikale.io/data/` 和 `https://cdn.jsdmirror.com/npm/lmfpd-data@latest/`。它们可能更新，提示词也随机生成，因此不同时间的结果不保证相同。当前账户历史只保存摘要、前三候选、样本状态及响应模型名等信息，不保留完整数字回答、全部挑战或完整参考版本元数据，无法仅靠历史记录重新计算原结果。
 
-检测能力及其实现的版权属于相应上游组件，见 [第三方版权与授权](../THIRD_PARTY_NOTICES.md)。
+上游实现与原理见 [lm-detector 仓库](https://github.com/Ikaleio/lm-detector)及[上游文档](https://lm.ikale.io/docs)。本项目与上游组件的关系见 [README 的版权与来源](../README.md#版权与来源)，版权及许可原文见 [第三方版权与授权](../THIRD_PARTY_NOTICES.md)。
