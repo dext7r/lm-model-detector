@@ -1,11 +1,12 @@
 {
-  "name": "lm-model-detector",
+  "name": "lm-model",
   "main": "src/worker.js",
   "compatibility_date": "2025-09-01",
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    "not_found_handling": "none"
+    "not_found_handling": "none",
+    "run_worker_first": true
   },
   // 可选：启用 Turnstile 时，同时配置 site key 和 TURNSTILE_SECRET。
   // 都未配置时跳过验证；只配置一项时登录和注册将被拒绝。

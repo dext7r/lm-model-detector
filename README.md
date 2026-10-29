@@ -19,7 +19,8 @@ src/worker.js               账户、配置、历史、分享及代理 API
 src/seo.js                  服务端 SEO、sitemap 和 RSS
 scripts/                    本地启动器与分享图生成脚本
 docs/DETECTION.md           检测逻辑及字段说明
-wrangler.example.jsonc      默认免登录、无存储部署模板
+wrangler.toml              Git 部署默认配置（免登录、无存储）
+wrangler.example.jsonc      可选的本地免登录配置模板
 wrangler.account.example.jsonc  可选账户版部署模板
 .dev.vars.example           本地密钥模板
 THIRD_PARTY_NOTICES.md       第三方版权及许可证原文
@@ -35,17 +36,31 @@ THIRD_PARTY_NOTICES.md       第三方版权及许可证原文
 
 ```bash
 npm ci
-cp wrangler.example.jsonc wrangler.jsonc
 # 仅需要本地启用 Turnstile 时复制并填写私钥
 cp .dev.vars.example .dev.vars
 npm run dev
 ```
 
-访问 `http://127.0.0.1:5180`，默认无需登录即可检测。启动器运行 Worker（8787 端口）与 Vite（5180 端口），`/api/` 请求由 Vite 转发给 Worker。需要本地体验账户版时，改用 `wrangler.account.example.jsonc` 复制为本地配置；本地 KV 数据位于 `.wrangler/state` 中。已有 `wrangler.jsonc` 的模式取决于其中是否绑定 KV，不会被代码更新自动更改。
+访问 `http://127.0.0.1:5180`，默认读取仓库中的 `wrangler.toml`，无需登录即可检测。启动器运行 Worker（8787 端口）与 Vite（5180 端口），`/api/` 请求由 Vite 转发给 Worker。需要本地体验账户版时，将 `wrangler.account.example.jsonc` 复制为 `wrangler.jsonc`；本地 KV 数据位于 `.wrangler/state` 中。已有 `wrangler.json` 或 `wrangler.jsonc` 时，Wrangler 优先读取它们，模式取决于其中是否绑定 KV；更新代码不会覆盖本地配置。
 
 也可以通过 `npm run dev:api` 和 `npm run dev:web` 分别启动两端。
 
 ## 自行部署
+
+仓库已包含可直接被 Wrangler 识别的 `wrangler.toml`，默认无需复制模板。其 Worker 名称为 `lm-model`；如果你的 Cloudflare Worker 使用其他名称，请同步修改配置中的 `name`。
+
+Cloudflare Workers 关联 Git 时，使用以下构建设置：
+
+| 设置 | 值 |
+| --- | --- |
+| 根目录 | 仓库根目录 |
+| 生产分支 | `main` |
+| 构建命令 | `npm run build` |
+| 部署命令 | `npx wrangler deploy` |
+
+构建步骤生成 `dist`，部署步骤按根配置上传 `src/worker.js` 和静态资源，并将静态资源绑定为 `ASSETS`。部署命令无需再执行 `npm run deploy`，否则会重复构建。此项目已有独立 Worker 入口，不需要运行 Wrangler 的框架自动配置，也不需要添加 Cloudflare Vite 插件。
+
+如果之前的自动配置留下了错误产物，先在 Cloudflare 构建设置中清除构建缓存，再重新构建。检查构建日志确认不再出现自动安装插件和创建配置的流程；`.wrangler/deploy/config.json` 等生成配置重定向文件可能改变实际使用的配置，详见 [Wrangler 生成配置说明](https://developers.cloudflare.com/workers/wrangler/configuration/#generated-wrangler-configuration)。完整的构建设置见 [Cloudflare Workers Builds 文档](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)。
 
 同一份代码通过 **是否绑定 `KV`** 自动选择模式，无需额外的前端构建开关：
 
@@ -58,13 +73,15 @@ npm run dev
 | 主题和语言偏好 | 仅当前页面内存 | 浏览器 localStorage |
 | 参考数据边缘缓存 | 不主动写入缓存，响应为 no-store | 缓存 24 小时 |
 
-1. **免登录版（默认）**：复制 `wrangler.example.jsonc` 为 `wrangler.jsonc`，无需创建 KV，也无需配置 Turnstile。模板默认关闭 Worker 可观测性日志。
+1. **免登录版（默认）**：直接使用仓库中的 `wrangler.toml`，无需创建 KV 或配置 Turnstile。默认关闭 Worker 可观测性日志。需要本地自定义时，可将 `wrangler.example.jsonc` 复制为 `wrangler.jsonc`。
 2. **账户版（可选）**：复制 `wrangler.account.example.jsonc` 为 `wrangler.jsonc`；使用自己的 Cloudflare 账户创建 KV 命名空间：`npx wrangler kv namespace create KV`，将 ID 填入 `kv_namespaces`，保留绑定名 `KV`。模板中的全零 ID 仅用于占位。访问 `/login` 注册账户。
 3. 按需修改 Worker 名称；需要自定义域名时添加自己的 `routes`，模板不绑定现有站点。
 4. 账户版可选启用 Turnstile：填写 `vars.TURNSTILE_SITE_KEY`，并执行 `npx wrangler secret put TURNSTILE_SECRET` 保存匹配私钥。也支持用 `TURNSTILE_SITE_KEY_MAP` 按域名选择 site key。两类密钥都未配置时仅跳过人机验证，账户登录仍然必需；只配置一类会拒绝登录和注册。免登录版忽略 Turnstile 配置。
 5. 完成配置后，自行运行所需构建和部署命令。
 
 已有部署要切换为免登录版时，删除本地配置中的 `KV` 绑定后重新部署即可；代码不会删除旧 KV 中已有的数据。重新绑定原 KV 可恢复账户功能。KV 已绑定但访问失败时仍按账户模式报错，不会降级成免登录。
+
+Git 部署只读取 Git 中的配置，被忽略的本地 `wrangler.jsonc` 不会上传。需要通过 Git 部署账户版时，在受版本控制的 `wrangler.toml` 中配置 `KV` 绑定；私钥通过 Cloudflare Secrets 设置。若要保留默认免登录配置，也可以提交另一份不含密钥的账户部署配置，并在 Cloudflare 部署命令中通过 `--config` 指定。已有本地 JSONC 配置可以继续使用，或通过 `--config wrangler.jsonc` 明确选择它。
 
 | 命令 | 用途 |
 | --- | --- |
@@ -75,7 +92,7 @@ npm run dev
 | `npm run preview` | 使用已有 `dist/` 产物运行 Worker 本地预览，不执行构建 |
 | `npm run preview:prod` | 构建后使用 Wrangler 本地预览 |
 
-`wrangler.jsonc`、`.dev.vars` 及 `.env*` 的真实配置均被 Git 忽略。只提交不含真实值的模板；不要将账户标识、KV ID、API Key 或 Turnstile 私钥写入源码。
+`wrangler.toml` 是受版本控制的公开默认配置；本地 `wrangler.json`、`wrangler.jsonc`、`.dev.vars` 及 `.env*` 被 Git 忽略。API Key、Turnstile 私钥和账户凭据不得写入受版本控制的文件。KV 命名空间 ID 是账户版部署所需的资源标识，不是鉴权密钥；提交账户部署配置前应核对需要公开的资源信息。
 
 ## 数据流与隐私
 

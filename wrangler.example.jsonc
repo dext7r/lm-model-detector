@@ -1,11 +1,12 @@
 {
-  "name": "lm-model-detector",
+  "name": "lm-model",
   "main": "src/worker.js",
   "compatibility_date": "2025-09-01",
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    "not_found_handling": "none"
+    "not_found_handling": "none",
+    "run_worker_first": true
   },
   // 不绑定 KV：自动启用免登录、无业务数据持久化模式。
   // 需要账户、历史与云端分享时，改用 wrangler.account.example.jsonc。

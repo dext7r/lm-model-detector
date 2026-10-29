@@ -6,10 +6,9 @@ dist/
 .DS_Store
 *.log
 
-# Local deployment configuration and credentials
+# Local deployment overrides and credentials; the safe default wrangler.toml is tracked.
 /wrangler.jsonc
 /wrangler.json
-/wrangler.toml
 .dev.vars
 .dev.vars.*
 !.dev.vars.example
