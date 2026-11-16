@@ -4,6 +4,10 @@
 
 以下保留随仓库浏览器 SDK 一并分发的组件授权原文。应用其他代码不因这些第三方授权自动获得相同许可。
 
+## ai-model-verifier
+
+本项目通过 npm 依赖 [ai-model-verifier](https://www.npmjs.com/package/ai-model-verifier) 提供可选的模型声明核验。该软件采用 **AGPL-3.0-only**；使用者应遵守该许可证，包括适用于通过网络提供软件的对应源码提供条款。许可证原文见 [GNU Affero General Public License, version 3](https://www.gnu.org/licenses/agpl-3.0.txt)，源码与版本信息见 [unorouter/ai-model-verifier](https://github.com/unorouter/ai-model-verifier)。该授权仅适用于该依赖，不表示应用其他代码采用 AGPL。
+
 ## lmfpd-sdk
 
 MIT License

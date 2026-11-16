@@ -18,6 +18,44 @@ const testResult = ref(null)
 const notFound = ref(false)
 const loading = ref(true)
 
+function parseNewApiClipboard(text) {
+  let value
+  try { value = JSON.parse(text) } catch { return null }
+  if (value?._type !== 'newapi_channel_conn' || typeof value.url !== 'string' || typeof value.key !== 'string') return null
+
+  const baseUrl = value.url.trim()
+  const apiKey = value.key.trim()
+  if (!/^https?:\/\//i.test(baseUrl) || !apiKey) return null
+
+  return { baseUrl, apiKey }
+}
+
+function applyNewApiClipboard(text) {
+  const value = parseNewApiClipboard(text)
+  if (!value) return false
+
+  form.value.baseUrl = value.baseUrl
+  form.value.apiKey = value.apiKey
+  toast(t('configForm.pasteImported'), 'ok')
+  return true
+}
+
+function handleConfigPaste(event) {
+  const text = event.clipboardData?.getData('text')
+  if (!text || !applyNewApiClipboard(text)) return
+  event.preventDefault()
+}
+
+async function readClipboard() {
+  if (!navigator.clipboard?.readText) return toast(t('configForm.clipboardUnavailable'), 'warn')
+  try {
+    const text = await navigator.clipboard.readText()
+    if (!applyNewApiClipboard(text)) toast(t('configForm.clipboardNoMatch'), 'warn')
+  } catch {
+    toast(t('configForm.clipboardDenied'), 'warn')
+  }
+}
+
 async function save() {
   if (!form.value.name.trim() || !form.value.baseUrl.trim() || !form.value.apiKey.trim()) {
     return toast(t('configForm.needAll'), 'warn')
@@ -117,11 +155,16 @@ onMounted(async () => {
       </div>
 
       <div class="grid gap-4 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)] lg:items-start">
-        <form class="panel p-5" autocomplete="off" @submit.prevent="save">
+        <form class="panel p-5" autocomplete="off" @submit.prevent="save" @paste.capture="handleConfigPaste">
           <label class="label-xs mb-1.5 block">{{ t('configForm.name') }}</label>
           <input v-model="form.name" class="field" maxlength="60" :placeholder="t('configForm.namePlaceholder')" />
 
-          <label class="label-xs mb-1.5 mt-4 block">Base URL</label>
+          <div class="mb-1.5 mt-4 flex items-center justify-between gap-3">
+            <label class="label-xs">Base URL</label>
+            <button type="button" class="btn btn-ghost btn-sm !min-h-7 !px-2 text-[11.5px]" @click="readClipboard">
+              {{ t('configForm.readClipboard') }}
+            </button>
+          </div>
           <input v-model="form.baseUrl" class="field font-mono" spellcheck="false" autocapitalize="off"
                  :placeholder="t('configForm.baseUrlPlaceholder')" />
 

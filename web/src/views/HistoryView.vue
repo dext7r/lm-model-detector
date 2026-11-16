@@ -195,6 +195,9 @@ onMounted(async () => {
               <td class="px-4 py-3">
                 <div class="text-[13px] font-medium">{{ h.prediction_name || h.prediction || '—' }}</div>
                 <div v-if="h.family_prediction_name" class="mt-0.5 text-[11px] text-mute">{{ h.family_prediction_name }}</div>
+                <div v-if="h.verification" class="mt-1 text-[11px] text-mute">
+                  {{ t('detect.verifier') }} · {{ t(`verifier.${h.verification.verdict}`) }}
+                </div>
               </td>
               <td class="whitespace-nowrap px-4 py-3">
                 <span v-if="h.probability != null" class="font-mono text-[12.5px] text-signal">{{ (h.probability * 100).toFixed(1) }}%</span>
@@ -227,6 +230,9 @@ onMounted(async () => {
               <div class="mt-1 flex items-center gap-1.5 text-[12px]">
                 <span class="text-mute">→</span>
                 <span class="truncate font-medium">{{ h.prediction_name || h.prediction || '—' }}</span>
+              </div>
+              <div v-if="h.verification" class="mt-1 text-[11px] text-mute">
+                {{ t('detect.verifier') }} · {{ t(`verifier.${h.verification.verdict}`) }}
               </div>
             </div>
             <StatusBadge :decision="h.decision" :error="h.error" />

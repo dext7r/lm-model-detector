@@ -21,6 +21,7 @@ const detectUrl = computed(() => {
   if (!r) return location.origin + '/detect'
   const q = new URLSearchParams({ models: r.model })
   if (r.api && r.api !== 'chat_completions') q.set('api', r.api)
+  if (r.verification) q.set('verifier', '1')
   return `${location.origin}/detect?${q}`
 })
 
@@ -123,6 +124,25 @@ onMounted(async () => {
             <span v-if="rec.family_prediction_name">{{ t('share.family') }} {{ rec.family_prediction_name }}</span>
             <span v-if="rec.ranking_score != null">score {{ rec.ranking_score.toFixed(3) }}</span>
             <span>{{ t('share.samples') }} {{ rec.used_outputs ?? '—' }}/3</span>
+          </div>
+        </div>
+
+        <div v-if="rec.verification" class="border-t border-line-soft px-5 py-4">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="label-xs">{{ t('detect.verifier') }}</span>
+            <span
+              class="ml-auto rounded-md border px-1.5 py-[1px] text-[11px] font-medium"
+              :class="rec.verification.verdict === 'suspicious'
+                ? 'border-danger/35 bg-danger/10 text-danger'
+                : rec.verification.verdict === 'genuine'
+                  ? 'border-signal/35 bg-signal/10 text-signal'
+                  : 'border-warn/35 bg-warn/10 text-warn'"
+            >{{ t(`verifier.${rec.verification.verdict}`) }}</span>
+          </div>
+          <div v-if="rec.verification.findings?.length" class="mt-2 space-y-1.5 text-[11.5px] text-mute">
+            <p v-for="finding in rec.verification.findings" :key="finding.rule">
+              <span class="mr-1 font-mono">{{ finding.rule }}</span>{{ finding.severity }}
+            </p>
           </div>
         </div>
 

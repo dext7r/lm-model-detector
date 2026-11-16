@@ -29,6 +29,10 @@ const strict = computed({
   get: () => route.query.strict === '1',
   set: (v) => patchQuery({ strict: v ? '1' : undefined }),
 })
+const verifier = computed({
+  get: () => route.query.verifier === '1' && apiProto.value !== 'responses',
+  set: (v) => patchQuery({ verifier: v ? '1' : undefined }),
+})
 // 并发度：放在 URL 里，刷新或分享链接后仍保持用户选择
 const concurrency = computed({
   get: () => normalizeConcurrency(route.query.conc),
@@ -63,6 +67,9 @@ let filterTimer
 watch(filterInput, (v) => {
   clearTimeout(filterTimer)
   filterTimer = setTimeout(() => patchQuery({ q: v.trim() || undefined }), 300)
+})
+watch(apiProto, (value) => {
+  if (value === 'responses' && route.query.verifier === '1') patchQuery({ verifier: undefined })
 })
 watch(() => route.query.q, (v) => { if ((v || '') !== filterInput.value) filterInput.value = v || '' })
 
@@ -122,6 +129,7 @@ async function start() {
     effort: effort.value,
     strict: strict.value,
     concurrency: concurrency.value,
+    verifier: verifier.value,
   })
 }
 function stop() {
@@ -228,6 +236,14 @@ onMounted(async () => {
             <span class="text-[12.5px] leading-snug text-chalk/85">
               {{ t('detect.strict') }}
               <span class="mt-0.5 block text-[11.5px] text-mute">{{ t('detect.strictDesc') }}</span>
+            </span>
+          </label>
+
+          <label class="mt-3 flex cursor-pointer items-start gap-2.5">
+            <input v-model="verifier" type="checkbox" :disabled="apiProto === 'responses'" class="mt-0.5 size-4 shrink-0 accent-[var(--color-signal)] disabled:cursor-not-allowed disabled:opacity-50" />
+            <span class="text-[12.5px] leading-snug text-chalk/85">
+              {{ t('detect.verifier') }}
+              <span class="mt-0.5 block text-[11.5px] text-mute">{{ t(apiProto === 'responses' ? 'detect.verifierResponsesUnsupported' : 'detect.verifierDesc') }}</span>
             </span>
           </label>
 
@@ -365,6 +381,9 @@ onMounted(async () => {
                   >{{ t('common.details') }}</RouterLink>
                 </div>
               </div>
+              <div v-if="row.verifierStatus === 'running'" class="mt-1 text-right text-[11px] text-sky">
+                {{ t('detect.verifierRunning') }}
+              </div>
 
               <div v-if="row.err" class="mt-2 rounded-lg border border-danger/25 bg-danger/6 px-2.5 py-1.5 text-[12px] text-danger/90">
                 {{ row.err }}
@@ -400,6 +419,35 @@ onMounted(async () => {
                   </div>
                 </template>
                 <p v-else-if="row.record.error" class="text-[12px] text-warn/90">{{ row.record.error }}</p>
+                <div v-if="row.record.verification" class="mt-2 border-t border-line-soft pt-2">
+                  <div class="flex flex-wrap items-center gap-2 text-[12px]">
+                    <span class="text-mute">{{ t('detect.verifier') }}</span>
+                    <span
+                      class="rounded-md border px-1.5 py-[1px] text-[11px] font-medium"
+                      :class="row.record.verification.verdict === 'suspicious'
+                        ? 'border-danger/35 bg-danger/10 text-danger'
+                        : row.record.verification.verdict === 'genuine'
+                          ? 'border-signal/35 bg-signal/10 text-signal'
+                          : 'border-warn/35 bg-warn/10 text-warn'"
+                    >{{ t(`verifier.${row.record.verification.verdict}`) }}</span>
+                    <span v-if="row.record.verification.detectedModel" class="font-mono text-[11px] text-mute">
+                      {{ row.record.verification.detectedModel }}
+                    </span>
+                  </div>
+                  <ul v-if="row.record.verification.findings?.length" class="mt-1.5 space-y-1 text-[11.5px] text-mute">
+                    <li v-for="finding in row.record.verification.findings.slice(0, 3)" :key="finding.rule">
+                      {{ finding.reason }}
+                    </li>
+                  </ul>
+                  <ul v-else-if="row.record.verification.reasons?.length" class="mt-1.5 space-y-1 text-[11.5px] text-mute">
+                    <li v-for="(reason, index) in row.record.verification.reasons.slice(0, 3)" :key="index">
+                      {{ reason }}
+                    </li>
+                  </ul>
+                  <p v-else-if="row.record.verification.error" class="mt-1 text-[11.5px] text-warn/90">
+                    {{ row.record.verification.error }}
+                  </p>
+                </div>
               </div>
             </article>
           </div>

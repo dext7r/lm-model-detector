@@ -77,6 +77,7 @@ const retestLink = computed(() => {
   if (r.configId) q.set('config', r.configId)
   q.set('models', r.model)
   if (r.api && r.api !== 'chat_completions') q.set('api', r.api)
+  if (r.verification) q.set('verifier', '1')
   return '/detect?' + q.toString()
 })
 
@@ -242,6 +243,39 @@ onMounted(async () => {
           {{ rec.evidence_reason }}
         </p>
         <p v-if="rec.error" class="border-t border-line-soft px-4 py-3 text-[12px] text-danger/90">{{ rec.error }}</p>
+      </section>
+
+      <section v-if="rec.verification" class="panel mb-4 overflow-hidden">
+        <div class="flex flex-wrap items-center gap-2 border-b border-line-soft p-4">
+          <h2 class="label-xs">{{ t('detect.verifier') }}</h2>
+          <span
+            class="ml-auto rounded-md border px-2 py-[3px] text-[11.5px] font-medium"
+            :class="rec.verification.verdict === 'suspicious'
+              ? 'border-danger/35 bg-danger/10 text-danger'
+              : rec.verification.verdict === 'genuine'
+                ? 'border-signal/35 bg-signal/10 text-signal'
+                : 'border-warn/35 bg-warn/10 text-warn'"
+          >{{ t(`verifier.${rec.verification.verdict}`) }}</span>
+        </div>
+        <div class="space-y-2 px-4 py-3">
+          <p v-if="rec.verification.detectedModel" class="font-mono text-[11.5px] text-mute">
+            {{ t('detail.verifierReturned') }}: {{ rec.verification.detectedModel }}
+          </p>
+          <ul v-if="rec.verification.findings?.length" class="space-y-2">
+            <li v-for="finding in rec.verification.findings" :key="finding.rule" class="text-[12px] leading-relaxed">
+              <span class="mr-1.5 font-mono text-[10.5px] text-mute">{{ finding.rule }}</span>
+              <span>{{ finding.reason }}</span>
+            </li>
+          </ul>
+          <ul v-else-if="rec.verification.reasons?.length" class="space-y-2">
+            <li v-for="(reason, index) in rec.verification.reasons" :key="index" class="text-[12px] leading-relaxed">
+              {{ reason }}
+            </li>
+          </ul>
+          <p v-else-if="rec.verification.error" class="text-[12px] text-warn/90">
+            {{ rec.verification.error }}
+          </p>
+        </div>
       </section>
 
       <!-- Top 候选 -->

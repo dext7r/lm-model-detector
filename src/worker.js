@@ -390,6 +390,16 @@ async function handleApi(request, env, ctx, url) {
       evidence_label: rec.evidence_label, evidence_reason: rec.evidence_reason,
       error: rec.error, api: rec.api, effort: rec.effort,
       configName: rec.configName, baseUrl: rec.baseUrl,
+      verification: rec.verification ? {
+        verdict: rec.verification.verdict,
+        maker: rec.verification.maker,
+        detectedModel: rec.verification.detectedModel,
+        probesPassed: rec.verification.probesPassed,
+        probesTotal: rec.verification.probesTotal,
+        findings: (Array.isArray(rec.verification.findings) ? rec.verification.findings : []).slice(0, 8).map(f => ({
+          rule: f.rule, severity: f.severity,
+        })),
+      } : null,
       top: Array.isArray(rec.top) ? rec.top.slice(0, 3) : [],
       samples: (Array.isArray(rec.samples) ? rec.samples : []).map(s => ({
         state: s.state, count: s.count, expected_count: s.expected_count,
@@ -717,6 +727,7 @@ async function handleProxy(request, url, stateless = false) {
       method,
       headers,
       body: body?.byteLength ? body : undefined,
+      signal: request.signal,
       ...(stateless ? { redirect: 'manual' } : {}),
     })
     if (stateless && upstream.status >= 300 && upstream.status < 400) {

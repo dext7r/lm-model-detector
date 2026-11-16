@@ -1,8 +1,10 @@
 # 模型指纹检测 · LM Fingerprint Detector
 
-基于上游项目 [lm-detector](https://github.com/Ikaleio/lm-detector) 的 [lmfpd-sdk](https://www.npmjs.com/package/lmfpd-sdk) 开发的模型指纹检测应用。填写 Base URL 和 API Key，拉取模型列表，批量采样并与参考库中的模型进行统计比对。支持多组配置与中英双语界面；绑定 KV 后还支持账户隔离、检测历史和云端分享。
+基于上游项目 [lm-detector](https://github.com/Ikaleio/lm-detector) 的 [lmfpd-sdk](https://www.npmjs.com/package/lmfpd-sdk) 开发的模型指纹检测应用。填写 Base URL 和 API Key，拉取模型列表，批量采样并与参考库中的模型进行统计比对；也可选用 [ai-model-verifier](https://www.npmjs.com/package/ai-model-verifier) 对接口声明的模型做独立核验。支持多组配置与中英双语界面；绑定 KV 后还支持账户隔离、检测历史和云端分享。
 
 检测结果是**参考库内的候选排名，不能确证模型身份**。核心检测算法由上游 SDK 提供，本项目负责浏览器适配、界面、请求代理及账户存储。[检测逻辑说明](docs/DETECTION.md)介绍采样、评分和结果限制。
+
+可选的模型声明核验会额外请求上游接口，结论独立展示，不与指纹排名合并，可能产生 API 费用。
 
 ## 技术与目录
 
@@ -12,6 +14,7 @@ Vue 3、Vite、Tailwind CSS v4、Vue Router、Cloudflare Workers 和 KV。
 web/                       当前 Vue 前端
   public/og.png             分享图静态资源
   src/detector.js            SDK 初始化与跨域请求转发
+  src/verifier.js            可选模型声明核验与结果摘要
   src/store.js               账户、配置与批量检测调度
   src/vendor/                浏览器 SDK 产物，本地开发直接引用
 browser/                    SDK 浏览器入口及 Node 模块适配层
@@ -125,9 +128,12 @@ Git 部署只读取 Git 中的配置，被忽略的本地 `wrangler.jsonc` 不�
 - [Ikaleio/lm-detector：上游源码仓库](https://github.com/Ikaleio/lm-detector)
 - [lmfpd：上游命令行工具（npm）](https://www.npmjs.com/package/lmfpd)
 - [lmfpd-sdk 0.2.0：本项目使用的检测 SDK（npm）](https://www.npmjs.com/package/lmfpd-sdk/v/0.2.0)
+- [ai-model-verifier：可选的模型声明核验器（npm）](https://www.npmjs.com/package/ai-model-verifier)
 - [上游使用与原理文档](https://lm.ikale.io/docs)
 - [本项目的第三方版权与授权声明](THIRD_PARTY_NOTICES.md)
 
 本项目通过 SDK 复用上游检测能力。核心检测组件 **lmfpd-sdk 0.2.0** 采用 **MIT License**，原作者版权为 **Copyright (c) 2026 xqy2006**。完整授权条款及浏览器 bundle 中相关组件的版权见上述第三方声明；现有页面版权标识与 bundle 内的许可证注释予以保留。
+
+可选核验依赖 **ai-model-verifier** 采用 **AGPL-3.0-only**。其源码及许可义务见 [第三方版权与授权声明](THIRD_PARTY_NOTICES.md#ai-model-verifier)。
 
 本次整理未为应用自身新增许可证；第三方组件的 MIT 授权只覆盖对应组件。若要正式以开源许可证发布应用其余代码，仍需由其版权持有人明确授权。

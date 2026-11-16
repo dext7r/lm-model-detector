@@ -3,6 +3,7 @@ import { api, postJSON, putJSON, del, buildQuery, getToken, setToken, clearToken
 import { t } from './i18n'
 import { listConfigs } from './configs'
 import { isAccountMode } from './runtime'
+import { summarizeVerification, verifyModel } from './verifier'
 
 // 便于视图层统一从 store 引入
 export { api, postJSON, putJSON, del, buildQuery, getToken, setToken, clearToken }
@@ -26,6 +27,7 @@ export const detectTask = reactive({
   api: 'chat_completions',
   effort: '',
   strict: false,
+  verifier: false,
   concurrency: 10,
   startedAt: 0,
   phase: 'idle', // idle | loading-data | running | done
@@ -138,6 +140,7 @@ export async function deleteHistory(key) {
 // 首字节到达后它就把自己的超时定时器清掉了，之后没有任何兜底。因此这里必须
 // 自己持有 AbortController，既能响应「停止」按钮，也能给单个模型设总时长上限。
 const MODEL_TIMEOUT_MS = 180000 // 单个模型（3 个样本并行）的总时长上限
+const VERIFIER_TIMEOUT_MS = 180000
 
 // 并发度上限：每个模型内部已经有 3 个样本并行，再叠加过多模型会同时打满
 // 上游配额，反而更容易触发限流。10 是实践中的折中值。
@@ -158,7 +161,7 @@ export function stopBatch() {
   batchAbort?.abort()
 }
 
-export async function runBatch({ config, models, apiProto, effort, strict, concurrency }) {
+export async function runBatch({ config, models, apiProto, effort, strict, concurrency, verifier = false }) {
   if (detectTask.running) { toast(t('detect.inProgress'), 'warn'); return }
   if (!config) { toast(t('detect.needConfig'), 'warn'); return }
   if (!models.length) { toast(t('detect.needModels'), 'warn'); return }
@@ -168,10 +171,10 @@ export async function runBatch({ config, models, apiProto, effort, strict, concu
 
   Object.assign(detectTask, {
     running: true, stop: false,
-    rows: models.map(m => ({ model: m, status: 'pending', record: null, err: null, samplesDone: 0 })),
+    rows: models.map(m => ({ model: m, status: 'pending', record: null, err: null, samplesDone: 0, verifierStatus: verifier ? 'pending' : 'disabled' })),
     done: 0, total: models.length, concurrency: limit,
     configId: config.id, configName: config.name,
-    api: apiProto, effort: effort || '', strict: !!strict,
+    api: apiProto, effort: effort || '', strict: !!strict, verifier: !!verifier,
     startedAt: Date.now(), phase: 'loading-data',
   })
   const controller = new AbortController()
@@ -206,7 +209,7 @@ export async function runBatch({ config, models, apiProto, effort, strict, concu
     // 单个模型的看门狗：到点强制中止，避免上游「连上不结束」时永久挂起
     const modelAbort = new AbortController()
     let timedOut = false
-    const watchdog = setTimeout(() => { timedOut = true; modelAbort.abort() }, MODEL_TIMEOUT_MS)
+    let watchdog = setTimeout(() => { timedOut = true; modelAbort.abort() }, MODEL_TIMEOUT_MS)
     const signal = AbortSignal.any([controller.signal, modelAbort.signal])
     try {
       const cfg = { baseUrl: config.baseUrl, apiKey: config.apiKey, model: row.model, api: apiProto }
@@ -227,10 +230,32 @@ export async function runBatch({ config, models, apiProto, effort, strict, concu
       })
       if (version !== batchVersion) return
       const a = result.analysis || {}
+      let verification = null
+      if (verifier) {
+        row.verifierStatus = 'running'
+        clearTimeout(watchdog)
+        if (signal.aborted) {
+          verification = { verdict: 'unverified', reasons: [], findings: [], error: t('detect.manualStop') }
+          row.verifierStatus = 'unverified'
+        } else {
+          timedOut = false
+          watchdog = setTimeout(() => { timedOut = true; modelAbort.abort() }, VERIFIER_TIMEOUT_MS)
+          try {
+            const verified = await verifyModel({ config, model: row.model, apiProto, signal })
+            verification = summarizeVerification(verified)
+            row.verifierStatus = verification.verdict
+          } catch (e) {
+            verification = { verdict: 'unverified', reasons: [], findings: [], error: e.message }
+            row.verifierStatus = 'unverified'
+          }
+        }
+      }
+      if (version !== batchVersion) return
       const record = {
         configId: config.id, configName: config.name, baseUrl: config.baseUrl,
         model: row.model, api: apiProto, effort: effort || null,
         error: result.error ?? null,
+        verification,
         decision: a.decision ?? null,
         prediction: a.prediction ?? null, prediction_name: a.prediction_name ?? null,
         family_prediction: a.family_prediction ?? null, family_prediction_name: a.family_prediction_name ?? null,
